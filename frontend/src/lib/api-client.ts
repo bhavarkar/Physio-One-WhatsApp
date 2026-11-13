@@ -55,6 +55,36 @@ export interface UserListResponse {
   page_size: number;
 }
 
+export interface WhatsAppConnection {
+  id: string;
+  provider: 'meta' | 'ycloud';
+  account_name: string;
+  phone_number_id: string;
+  business_account_id: string | null;
+  display_phone_number: string;
+  webhook_verify_token: string;
+  has_access_token: boolean;
+  has_secret_key: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConnectionTestResult {
+  is_valid: boolean;
+  display_name: string | null;
+  phone_number: string | null;
+  error: string | null;
+}
+
+export interface TestMessageResult {
+  success: boolean;
+  message_id: string | null;
+  provider_message_id: string | null;
+  status: string;
+  error: string | null;
+}
+
 export interface ApiErrorDetail {
   code?: string;
   message: string;
@@ -222,4 +252,60 @@ export const api = {
     apiFetch<{ message: string }>(`/api/v1/users/${userId}/revoke-sessions`, {
       method: 'POST',
     }),
+
+  // WhatsApp Provider Connections
+  getWhatsAppConnections: () =>
+    apiFetch<WhatsAppConnection[]>('/api/v1/whatsapp/connections'),
+
+  createWhatsAppConnection: (data: {
+    provider: string;
+    account_name: string;
+    phone_number_id: string;
+    display_phone_number: string;
+    business_account_id?: string;
+    webhook_verify_token: string;
+    access_token: string;
+    secret_key?: string;
+    provider_config?: Record<string, unknown>;
+    is_active?: boolean;
+  }) =>
+    apiFetch<WhatsAppConnection>('/api/v1/whatsapp/connections', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateWhatsAppConnection: (
+    id: string,
+    data: {
+      account_name?: string;
+      display_phone_number?: string;
+      business_account_id?: string;
+      webhook_verify_token?: string;
+      access_token?: string;
+      secret_key?: string;
+      provider_config?: Record<string, unknown>;
+      is_active?: boolean;
+    }
+  ) =>
+    apiFetch<WhatsAppConnection>(`/api/v1/whatsapp/connections/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  testWhatsAppConnection: (id: string) =>
+    apiFetch<ConnectionTestResult>(`/api/v1/whatsapp/connections/${id}/test`, {
+      method: 'POST',
+    }),
+
+  sendWhatsAppTestMessage: (
+    id: string,
+    data: { recipient_phone: string; message_text: string }
+  ) =>
+    apiFetch<TestMessageResult>(`/api/v1/whatsapp/connections/${id}/send-test`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
+
+export const apiClient = api;
+

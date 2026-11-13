@@ -6,7 +6,7 @@ from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.api.v1 import auth, users
+from app.api.v1 import auth, users, whatsapp, webhooks
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -42,6 +42,8 @@ async def health_check():
 api_v1_router = APIRouter(prefix="/api/v1")
 api_v1_router.include_router(auth.router)
 api_v1_router.include_router(users.router)
+api_v1_router.include_router(whatsapp.router)
+api_v1_router.include_router(webhooks.router)
 
 app.include_router(api_v1_router)
 

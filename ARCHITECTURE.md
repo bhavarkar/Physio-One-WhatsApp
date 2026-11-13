@@ -152,3 +152,44 @@ sequenceDiagram
 | **Campaign Window** | Celery Beat Time Window Check | Marketing messages are legally restricted to 09:00 - 21:00 IST. The scheduler strictly drops execution outside this window. |
 | **Conversation Synthesis** | LLM Gateway (Deepti Receptionist) | Polite, empathetic tone in Hindi, English, and Hinglish; understanding voice transcripts; conversational intent resolution. |
 
+---
+
+## 7. WhatsApp Provider Subsystem (Task 5)
+
+The WhatsApp messaging layer is decoupled through a common internal provider contract (`WhatsAppProvider`) supporting both official Meta WhatsApp Cloud API and YCloud (for existing Physio One operations):
+
+```
+                       ┌─────────────────────────┐
+                       │   FastAPI Webhook /     │
+                       │   Messaging Service     │
+                       └────────────┬────────────┘
+                                    │ (Resolves via Factory)
+                                    ▼
+                       ┌─────────────────────────┐
+                       │    WhatsAppProvider     │
+                       │   (Abstract Contract)   │
+                       └────────────┬────────────┘
+                                    │
+               ┌────────────────────┴────────────────────┐
+               ▼                                         ▼
+   ┌───────────────────────┐                 ┌───────────────────────┐
+   │   MetaCloudProvider   │                 │    YCloudProvider     │
+   │  (Graph API v20.0)    │                 │ (Existing Operations) │
+   └───────────┬───────────┘                 └───────────┬───────────┘
+               │                                         │
+               ▼                                         ▼
+    Meta WhatsApp Cloud API                     YCloud WhatsApp API
+```
+
+### Key Architectural Invariants:
+1. **Zero Multi-Tenancy**: All connection records and message streams belong exclusively to the single organization.
+2. **Encrypted Credential Storage**: All sensitive credentials (`access_token`, `secret_key`) are symmetrically encrypted with Fernet (AES-128-CBC + HMAC-SHA256) at rest. Tokens are decrypted only in memory when dispatching requests or verifying webhook signatures.
+3. **Dual Signature Verification**:
+   - Meta: Validates `X-Hub-Signature-256` header against raw request payload via HMAC-SHA256 with Meta App Secret. Supports GET `hub.challenge` handshake.
+   - YCloud: Validates `YCloud-Signature` header against raw request payload via HMAC-SHA256 with YCloud Webhook Secret.
+4. **Durable Ingress & Deduplication**:
+   - Every inbound webhook event is recorded in `webhook_events` with unique event ID constraint.
+   - Duplicate events are immediately dropped with HTTP 200 to prevent duplicate processing.
+   - Delivery status receipts (`sent`, `delivered`, `read`, `failed`) update the target message record without creating redundant message entities.
+
+

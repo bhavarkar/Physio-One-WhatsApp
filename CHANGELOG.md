@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0-draft] - 2026-11-13
 
 ### Added
+- **Task 5: WhatsApp Provider Integration (Meta Cloud API & YCloud)**:
+  - Implemented common internal provider contract `WhatsAppProvider` in `backend/app/providers/base.py` defining standardized methods: `validate_connection()`, `send_text_message()`, `send_template_message()`, `send_media_message()`, `verify_webhook_signature()`, `parse_inbound_webhook()`, and `parse_status_update()`.
+  - Implemented `MetaCloudProvider` adapter (`backend/app/providers/meta.py`) targeting official Meta WhatsApp Cloud API (Graph API v20.0) with support for text, media, interactive messages, `hub.challenge` verification, and `X-Hub-Signature-256` HMAC-SHA256 signature validation.
+  - Implemented `YCloudProvider` adapter (`backend/app/providers/ycloud.py`) preserving existing Physio One clinical operations with `X-API-Key` headers, `YCloud-Signature` HMAC-SHA256 signature validation, and normalized inbound/status payload parsing.
+  - Implemented provider factory `get_provider_adapter(account)` resolving accounts, decrypting stored credentials on-the-fly, and instantiating appropriate provider adapters.
+  - Implemented symmetric credential encryption via Fernet (AES-128-CBC + HMAC-SHA256) in `backend/app/core/crypto.py` with deterministic SHA-256 key derivation from application secret. Zero plaintext credentials at rest or in API schemas.
+  - Created durable webhook ingestion and processing service (`WhatsAppMessagingService`) in `backend/app/services/whatsapp_service.py` with idempotency deduplication in `webhook_events`, automatic contact & conversation upserting, outbound dispatch, and delivery status tracking (`sent` -> `delivered` -> `read` / `failed`).
+  - Implemented RBAC-protected connection management API (`/api/v1/whatsapp/connections`) for Owner/Admin roles with test handshake and test dispatch endpoints.
+  - Implemented public webhook receivers under `/api/v1/webhooks/whatsapp/meta` (GET subscription challenge + POST event ingestion) and `/api/v1/webhooks/whatsapp/ycloud` (POST event ingestion).
+  - Built comprehensive frontend WhatsApp connection management dashboard under `/settings` with Meta vs YCloud badges, handshake verification, live test message modal, activation toggles, and masked credential displays.
+  - Implemented automated test suite with 10 unit and integration tests in `backend/tests/test_whatsapp_provider.py` (33/33 backend tests passing total).
+  - Implemented frontend unit tests in `frontend/src/app/(dashboard)/settings/settings.test.tsx` (6/6 test suites, 19/19 tests passing).
+
 - **Task 4: Frontend Foundation and Authentication UI**:
   - Implemented Next.js 14 App Router application structure in `frontend/` with TypeScript strict mode and Tailwind CSS.
   - Designed clinical SaaS theme tokens and built reusable UI component library: `Button`, `Input`, `Card`, `Badge`, `Alert`, `Dialog`, and `Table`.

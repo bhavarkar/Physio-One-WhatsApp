@@ -41,14 +41,18 @@
 
 ---
 
-### B. WhatsApp Ingress & Messaging Adapters
+### B. WhatsApp Ingress & Provider Integration (Task 5)
 | Method | Endpoint | Description | Role Required |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/api/v1/whatsapp/webhook` | Meta Webhook challenge verification (`hub.challenge`) | Public |
-| `POST` | `/api/v1/whatsapp/webhook` | Inbound message and delivery status webhook receiver | Public (HMAC verified) |
-| `GET` | `/api/v1/whatsapp/templates`| List approved WhatsApp message templates from Meta | `Operator`+ |
-| `POST` | `/api/v1/whatsapp/templates/sync`| Trigger sync of Meta Cloud API templates | `Manager`+ |
-| `POST` | `/api/v1/whatsapp/send-template`| Send an outbound template message to a contact | `Operator`+ |
+| `GET` | `/api/v1/whatsapp/connections` | List configured WhatsApp connections with masked secrets | `Owner`, `Admin` |
+| `POST` | `/api/v1/whatsapp/connections` | Register a new Meta Cloud or YCloud provider connection | `Owner`, `Admin` |
+| `GET` | `/api/v1/whatsapp/connections/{id}` | Retrieve connection details with masked secrets | `Owner`, `Admin` |
+| `PUT` | `/api/v1/whatsapp/connections/{id}` | Update connection parameters or replace encrypted secrets | `Owner`, `Admin` |
+| `POST` | `/api/v1/whatsapp/connections/{id}/test` | Perform live provider handshake and connection validation | `Owner`, `Admin` |
+| `POST` | `/api/v1/whatsapp/connections/{id}/send-test` | Dispatch a live outbound test message to a recipient | `Owner`, `Admin` |
+| `GET` | `/api/v1/webhooks/whatsapp/meta` | Meta Webhook subscription verification (`hub.challenge`) | Public |
+| `POST` | `/api/v1/webhooks/whatsapp/meta` | Meta Cloud API inbound message and status receiver (`X-Hub-Signature-256`) | Public (HMAC verified) |
+| `POST` | `/api/v1/webhooks/whatsapp/ycloud` | YCloud inbound message and status update receiver (`YCloud-Signature`) | Public (HMAC verified) |
 
 ---
 
