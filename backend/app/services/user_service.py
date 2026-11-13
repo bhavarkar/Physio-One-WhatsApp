@@ -237,3 +237,4 @@ async def deactivate_user(
         is_active=False,
         ip_address=ip_address,
     )
+

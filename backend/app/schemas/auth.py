@@ -78,3 +78,4 @@ class SessionResponse(BaseModel):
     expires_at: datetime
     created_at: datetime
     is_current: bool = False
+

@@ -109,3 +109,4 @@ class UserListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+

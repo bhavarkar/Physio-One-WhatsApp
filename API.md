@@ -22,15 +22,22 @@
 ### A. Authentication & User Management
 | Method | Endpoint | Description | Role Required |
 | :--- | :--- | :--- | :--- |
-| `POST` | `/api/v1/auth/login` | Authenticate user and issue JWT token in HTTP-only cookie | Public |
-| `POST` | `/api/v1/auth/logout` | Revoke session and clear cookies | Authenticated |
-| `POST` | `/api/v1/auth/refresh` | Rotate access token using refresh token | Authenticated |
-| `GET` | `/api/v1/auth/me` | Return profile and permissions of current user | Authenticated |
-| `GET` | `/api/v1/users` | List all staff users | `Admin`, `Super Admin` |
-| `POST` | `/api/v1/users` | Create a new staff user | `Admin`, `Super Admin` |
-| `PUT` | `/api/v1/users/{id}` | Update staff user details or status | `Admin`, `Super Admin` |
-| `DELETE` | `/api/v1/users/{id}` | Deactivate staff user | `Super Admin` |
-| `GET` | `/api/v1/roles` | List available system roles and permissions | `Admin`, `Super Admin` |
+| `GET` | `/api/v1/auth/setup-status` | Check if initial clinic Owner has been created | Public |
+| `POST` | `/api/v1/auth/setup` | One-time setup: initialize master Owner account | Public (Blocked once initialized) |
+| `POST` | `/api/v1/auth/login` | Authenticate staff user, issue HttpOnly `session_id` & `csrf_token` cookies | Public |
+| `POST` | `/api/v1/auth/logout` | Revoke current session and clear auth cookies | Authenticated |
+| `GET` | `/api/v1/auth/me` | Return profile and role of current authenticated staff user | Authenticated |
+| `GET` | `/api/v1/auth/sessions` | List all active sessions for current user | Authenticated |
+| `POST` | `/api/v1/auth/sessions/{id}/revoke` | Revoke a specific active session | Authenticated |
+| `POST` | `/api/v1/auth/sessions/revoke-all` | Revoke all sessions except current one | Authenticated |
+| `POST` | `/api/v1/auth/change-password` | Update user password with optional multi-session revocation | Authenticated |
+| `GET` | `/api/v1/users` | List staff users with pagination and search | `Owner`, `Admin` |
+| `POST` | `/api/v1/users` | Provision a new staff user account (Admins cannot create Owners) | `Owner`, `Admin` |
+| `GET` | `/api/v1/users/{id}` | Retrieve profile and role details of a specific user | `Owner`, `Admin` |
+| `PUT` | `/api/v1/users/{id}` | Update staff user details (Protected against last Owner demotion) | `Owner`, `Admin` |
+| `DELETE` | `/api/v1/users/{id}` | Deactivate staff user and terminate all active sessions | `Owner`, `Admin` |
+| `POST` | `/api/v1/users/{id}/revoke-sessions` | Force terminate all active sessions for a staff member | `Owner`, `Admin` |
+| `GET` | `/api/v1/users/roles` | List all available system roles and permissions | `Owner`, `Admin` |
 
 ---
 

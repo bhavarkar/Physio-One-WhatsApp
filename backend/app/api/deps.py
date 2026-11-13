@@ -105,3 +105,4 @@ def require_permission(resource: str, action: str) -> Callable:
             )
         return user
     return permission_checker
+

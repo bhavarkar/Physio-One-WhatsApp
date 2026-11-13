@@ -225,3 +225,4 @@ async def update_my_password(
         ip_address=client_ip,
     )
     return {"message": "Password successfully updated."}
+

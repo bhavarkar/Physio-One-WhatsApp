@@ -72,3 +72,4 @@ def has_permission(role_name: str, resource: str, action: str, permissions: List
             return True
 
     return False
+

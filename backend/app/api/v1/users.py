@@ -151,3 +151,4 @@ async def force_revoke_user_sessions(
     """Force revoke all active sessions for a specific user."""
     count = await revoke_all_sessions(db, user_id=user_id, revoked_by_user_id=current_user.id)
     return {"message": f"Successfully revoked {count} active session(s) for user."}
+

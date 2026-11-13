@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0-draft] - 2026-11-13
 
 ### Added
+- **Task 4: Frontend Foundation and Authentication UI**:
+  - Implemented Next.js 14 App Router application structure in `frontend/` with TypeScript strict mode and Tailwind CSS.
+  - Designed clinical SaaS theme tokens and built reusable UI component library: `Button`, `Input`, `Card`, `Badge`, `Alert`, `Dialog`, and `Table`.
+  - Built centralized typed API client (`api-client.ts`) enforcing `credentials: 'include'` for HttpOnly cookies and double-submit `X-CSRF-Token` header injection on state-mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`).
+  - Implemented React `AuthProvider` with automatic backend session verification via `/api/v1/auth/me`.
+  - Created Staff Sign In (`/login`) with password visibility toggle, client validation, disabled state during submission, and generic error messaging.
+  - Implemented Initial Administrator Setup Wizard (`/setup`) with automatic redirect from login when uninitialized, and access lock when initialized.
+  - Implemented Password Reset Notice (`/forgot-password`) adhering to clinical PHI security standards.
+  - Created responsive application shell layout (`(dashboard)/layout.tsx`) with brand navigation, mobile drawer, user profile mini-card, and role-based route visibility.
+  - Created Clinical Operations Overview dashboard (`/dashboard`) with non-operational placeholder cards for upcoming pipeline stages.
+  - Built Staff Profile & Security management (`/profile`) with password change form and active session viewer/revocation controls.
+  - Built Staff User Management interface (`/users`) with search, role-based creation modal, Admin privilege escalation prevention (disabling Owner role creation), account deactivation/reactivation confirmation modals, and session revocation controls.
+  - Created multi-stage `docker/Dockerfile.frontend` and integrated `frontend` container service into `docker-compose.yml`.
+  - Automated Jest test suite covering API client, login, setup wizard, role-based layout navigation, and user management (16/16 tests passing, 100% pass rate).
+  - Next.js production build verified (`npm run build` outputting 16 static routes with 0 errors).
+
 - **Task 3: Authentication, RBAC, and User Management API**:
   - Implemented secure password hashing via Argon2id with automatic resilient fallback to Python standard library `hashlib.scrypt` when environment policies restrict native C-extensions.
   - Implemented controlled initial system setup flow (`GET /api/v1/auth/setup-status`, `POST /api/v1/auth/setup`) enforcing one-time initialization of the primary Owner.
