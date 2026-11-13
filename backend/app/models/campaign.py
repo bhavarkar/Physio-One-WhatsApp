@@ -109,3 +109,4 @@ class CampaignDelivery(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
 # Resolve forward references
 from app.models.whatsapp import WhatsAppContact, WhatsAppTemplate  # noqa: E402, F401
+

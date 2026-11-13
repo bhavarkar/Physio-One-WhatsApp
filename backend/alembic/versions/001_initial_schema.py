@@ -603,3 +603,4 @@ def downgrade() -> None:
     op.drop_table("users")
     op.drop_table("permissions")
     op.drop_table("roles")
+

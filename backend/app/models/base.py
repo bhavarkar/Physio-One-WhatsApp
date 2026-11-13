@@ -33,3 +33,4 @@ class UUIDPrimaryKeyMixin:
         primary_key=True,
         default=uuid.uuid4,
     )
+
