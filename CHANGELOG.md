@@ -7,9 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.0-draft] - 2026-11-13
+## [1.0.0-draft] - 2026-11-14
 
 ### Added
+- **Task 6: Clinical Appointments Engine & Availability Rules**:
+  - Implemented `AppointmentHistory` SQLAlchemy model (`backend/app/models/patient.py`) for comprehensive chronological tracking of appointment lifecycle events (`created`, `rescheduled`, `cancelled`, `completed`, `no_show`, `updated`).
+  - Extended `Appointment` model with `duration_minutes` (default 45), `created_by_id`, and `updated_by_id` audit foreign keys.
+  - Authored Alembic migration `002_appointment_history_and_rules.py` with SQL CHECK constraint `chk_appointment_no_sunday` and PostgreSQL `btree_gist` range exclusion constraint `uq_no_overlapping_active_appointments` preventing concurrent/overlapping active bookings.
+  - Implemented Pydantic v2 schemas (`backend/app/schemas/appointment.py`) including `TimeSlot`, `AvailabilityResponse`, `AppointmentCreate`, `AppointmentUpdate`, `AppointmentRescheduleRequest`, `AppointmentCancelRequest`, `AppointmentActionRequest`, and `AppointmentResponse`.
+  - Built dedicated `AppointmentService` (`backend/app/services/appointment_service.py`) with:
+    - Authoritative Sunday closure enforcement in clinic business timezone (`Asia/Kolkata` / UTC+05:30 with Windows compatibility fallback).
+    - Operating hours validation (09:00 - 20:00 IST) and 30-minute slot generation excluding past slots and active booking conflicts.
+    - Double-booking prevention via in-process async locks, PostgreSQL transactional advisory locks, and DB range exclusion constraints.
+    - Complete lifecycle operations (`create_appointment`, `reschedule_appointment`, `cancel_appointment`, `complete_appointment`, `mark_no_show`, `update_appointment`, `get_appointment`, `list_appointments`).
+    - Automatic patient record lookup/creation by contact phone number.
+    - Synchronized dual audit logging to `audit_logs` and `appointment_history`.
+  - Built REST API routes under `/api/v1/appointments` with structured business error mapping (`SUNDAY_RESTRICTION`, `OPERATING_HOURS_VIOLATION`, `PAST_APPOINTMENT`, `APPOINTMENT_CONFLICT`, `INVALID_STATUS_TRANSITION`) and least-privilege RBAC permission gates (`appointments:read`, `appointments:create`, `appointments:update`, `appointments:cancel`, `appointments:complete`, `appointments:no_show`).
+  - Added frontend typed client methods and interfaces in `frontend/src/lib/api-client.ts`.
+  - Built complete interactive appointment management dashboard (`frontend/src/app/(dashboard)/appointments/page.tsx`) with date filtering, status filtering, search, Sunday restriction banner, slot-picker booking dialog, reschedule modal, cancellation reason modal, completion & no-show actions, full audit timeline modal, and Viewer read-only restrictions.
+  - Created automated backend test suite (`backend/tests/test_appointments.py`) with 14 async scenarios covering availability, Sunday restrictions, overlap prevention, rescheduling, cancellation, completion, no-show, concurrency (`asyncio.gather`), CSRF validation, and RBAC permissions (47/47 backend tests passing).
+  - Created frontend test suite (`frontend/src/app/(dashboard)/appointments/appointments.test.tsx`) with Jest (22/22 frontend tests passing across 7 suites).
+
 - **Task 5: WhatsApp Provider Integration (Meta Cloud API & YCloud)**:
   - Implemented common internal provider contract `WhatsAppProvider` in `backend/app/providers/base.py` defining standardized methods: `validate_connection()`, `send_text_message()`, `send_template_message()`, `send_media_message()`, `verify_webhook_signature()`, `parse_inbound_webhook()`, and `parse_status_update()`.
   - Implemented `MetaCloudProvider` adapter (`backend/app/providers/meta.py`) targeting official Meta WhatsApp Cloud API (Graph API v20.0) with support for text, media, interactive messages, `hub.challenge` verification, and `X-Hub-Signature-256` HMAC-SHA256 signature validation.

@@ -47,12 +47,13 @@ from app.models import (
 
 
 def test_1_database_connection_and_table_count(engine):
-    """1. Test connection and verify all 33 tables are created in metadata."""
+    """1. Test connection and verify all tables (including appointment_history) are created in metadata."""
     assert engine is not None
     table_names = list(Base.metadata.tables.keys())
-    assert len(table_names) == 33
+    assert len(table_names) == 34
     assert "patients" in table_names
     assert "appointments" in table_names
+    assert "appointment_history" in table_names
     assert "whatsapp_messages" in table_names
     assert "webhook_events" in table_names
 

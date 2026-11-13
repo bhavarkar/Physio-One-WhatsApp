@@ -111,7 +111,66 @@ class Appointment(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     patient: Mapped["Patient"] = relationship("Patient", back_populates="appointments")
+    duration_minutes: Mapped[int] = mapped_column(Integer, default=45, nullable=False)
+    created_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    updated_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
+    history_entries: Mapped[List["AppointmentHistory"]] = relationship(
+        "AppointmentHistory",
+        back_populates="appointment",
+        cascade="all, delete-orphan",
+        order_by="AppointmentHistory.created_at.desc()",
+    )
+    created_by_user: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[created_by_id], lazy="joined"
+    )
+    updated_by_user: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[updated_by_id], lazy="joined"
+    )
+    rescheduled_from: Mapped[Optional["Appointment"]] = relationship(
+        "Appointment", remote_side="Appointment.id", foreign_keys=[rescheduled_from_id]
+    )
+
+
+class AppointmentHistory(Base, UUIDPrimaryKeyMixin):
+    """Audit history and lifecycle event tracking for appointments."""
+    __tablename__ = "appointment_history"
+    __table_args__ = (
+        Index("idx_appointment_history_appt_created", "appointment_id", "created_at"),
+    )
+
+    appointment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("appointments.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    action: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # created, rescheduled, cancelled, completed, no_show, updated
+    from_status: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    to_status: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    from_start_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    from_end_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    to_start_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    to_end_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    actor_type: Mapped[str] = mapped_column(
+        String(30), default="staff", nullable=False
+    )  # staff, patient, whatsapp, system, api
+    actor_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    appointment: Mapped["Appointment"] = relationship("Appointment", back_populates="history_entries")
+    actor_user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[actor_id], lazy="joined")
 
 
 # Resolve forward references
 from app.models.whatsapp import WhatsAppContact  # noqa: E402, F401
+from app.models.user import User  # noqa: E402, F401

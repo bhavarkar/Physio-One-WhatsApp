@@ -20,7 +20,7 @@ from app.models.whatsapp import (
 )
 
 # 3. Patient & Appointments
-from app.models.patient import Patient, PatientConsent, Appointment
+from app.models.patient import Patient, PatientConsent, Appointment, AppointmentHistory
 
 # 4. AI Agents & Tools
 from app.models.ai import (
@@ -78,6 +78,7 @@ __all__ = [
     "Patient",
     "PatientConsent",
     "Appointment",
+    "AppointmentHistory",
     "AIProvider",
     "AIModel",
     "AIAgent",

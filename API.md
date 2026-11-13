@@ -81,15 +81,28 @@
 
 ---
 
-### E. Appointments & Availability Engine
+### E. Appointments & Availability Engine (Task 6)
 | Method | Endpoint | Description | Role Required |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/api/v1/appointments/availability`| Query available time slots for a given date range. Enforces Sunday closure. | `Operator`+ / Tool |
-| `GET` | `/api/v1/appointments` | List appointments with filters (date range, status, practitioner) | `Operator`+ |
-| `POST` | `/api/v1/appointments` | Book appointment (ACID locked; rejects Sunday bookings) | `Operator`+ / Tool |
-| `GET` | `/api/v1/appointments/{id}`| Fetch appointment details | `Operator`+ |
-| `PUT` | `/api/v1/appointments/{id}/reschedule`| Reschedule appointment to a new slot (rejects Sunday) | `Operator`+ / Tool |
-| `POST` | `/api/v1/appointments/{id}/cancel`| Cancel appointment with reason code | `Operator`+ / Tool |
+| `GET` | `/api/v1/appointments/availability`| Query available time slots for a given date (`date=YYYY-MM-DD`, `duration_minutes=45`). Enforces hard Sunday closure. | `Viewer`+ (`appointments:read`) |
+| `GET` | `/api/v1/appointments` | List appointments with pagination, date range, status, patient ID, and text search | `Viewer`+ (`appointments:read`) |
+| `POST` | `/api/v1/appointments` | Create appointment (ACID locked; enforces Sunday restriction and working hours) | `Operator`+ (`appointments:create`) |
+| `GET` | `/api/v1/appointments/{id}`| Fetch full appointment details including patient and chronological history timeline | `Viewer`+ (`appointments:read`) |
+| `PATCH` | `/api/v1/appointments/{id}`| Update appointment metadata, notes, practitioner, or service type | `Operator`+ (`appointments:update`) |
+| `POST` | `/api/v1/appointments/{id}/reschedule`| Reschedule appointment to a new slot (enforces Sunday restriction & overlap check) | `Operator`+ (`appointments:update`) |
+| `POST` | `/api/v1/appointments/{id}/cancel`| Cancel appointment with cancellation reason and notes (record preserved) | `Operator`+ (`appointments:cancel`) |
+| `POST` | `/api/v1/appointments/{id}/complete`| Mark confirmed/scheduled appointment as completed with optional clinical notes | `Operator`+ (`appointments:complete`) |
+| `POST` | `/api/v1/appointments/{id}/no-show`| Mark appointment as no-show with optional operational notes | `Operator`+ (`appointments:no_show`) |
+
+#### Appointment Specific Error Codes
+| Code | HTTP Status | Description |
+| :--- | :--- | :--- |
+| `SUNDAY_RESTRICTION` | 422 Unprocessable Entity | Attempted booking or rescheduling on Sunday (clinic closed). |
+| `OPERATING_HOURS_VIOLATION` | 422 Unprocessable Entity | Attempted appointment outside operating hours (09:00 - 20:00 IST). |
+| `PAST_APPOINTMENT` | 422 Unprocessable Entity | Attempted booking or rescheduling in the past. |
+| `APPOINTMENT_CONFLICT` | 409 Conflict | Requested time slot overlaps with an existing active booking. |
+| `INVALID_STATUS_TRANSITION` | 400 Bad Request | Invalid lifecycle transition (e.g. rescheduling cancelled/completed appointment). |
+| `NOT_FOUND` | 404 Not Found | Specified appointment or patient does not exist. |
 
 ---
 

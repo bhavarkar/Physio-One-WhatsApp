@@ -11,7 +11,7 @@
 
 ---
 
-## 2. Implemented Database Entities (33 Tables)
+## 2. Implemented Database Entities (34 Tables)
 
 ```mermaid
 erDiagram
@@ -62,38 +62,39 @@ erDiagram
 11. **`message_debounce`**: Sliding-window debouncing cache for rapid successive messages.
 12. **`whatsapp_templates`**: Approved WhatsApp marketing and utility templates.
 
-#### 3. Patient Records & Appointments (3 tables)
+#### 3. Patient Records & Appointments (4 tables)
 13. **`patients`**: Clinic patient master record linked optionally to WhatsApp contact.
 14. **`patient_consents`**: Formal consent records for WhatsApp communication and marketing.
-15. **`appointments`**: Bookings with practitioner, service, start/end times, timezone, booking source, and Sunday exclusion constraint.
+15. **`appointments`**: Bookings with practitioner, service, start/end times, duration (`duration_minutes`), timezone (`Asia/Kolkata`), booking source, staff creator/updater (`created_by_id`, `updated_by_id`), Sunday check constraint (`chk_appointment_no_sunday`), and PostgreSQL range exclusion constraint (`uq_no_overlapping_active_appointments`).
+16. **`appointment_history`**: Audit event tracking and chronological lifecycle history (created, rescheduled, cancelled, completed, no_show, updated) with previous and updated start/end times, reason codes, actor details (`actor_type`, `actor_id`), and staff notes.
 
 #### 4. AI Engine & Tool Execution (6 tables)
-16. **`ai_providers`**: LLM gateway endpoints (Muse, OpenAI, Anthropic, Custom).
-17. **`ai_models`**: Supported models per provider with tool/vision flags.
-18. **`ai_agents`**: Configured agent personas (Deepti, Follow-up, Campaign).
-19. **`ai_agent_versions`**: Historical versions of agent system prompts.
-20. **`ai_tool_definitions`**: JSON-schema validated tool specifications.
-21. **`ai_tool_executions`**: Execution history and audit logs of tool calls.
+17. **`ai_providers`**: LLM gateway endpoints (Muse, OpenAI, Anthropic, Custom).
+18. **`ai_models`**: Supported models per provider with tool/vision flags.
+19. **`ai_agents`**: Configured agent personas (Deepti, Follow-up, Campaign).
+20. **`ai_agent_versions`**: Historical versions of agent system prompts.
+21. **`ai_tool_definitions`**: JSON-schema validated tool specifications.
+22. **`ai_tool_executions`**: Execution history and audit logs of tool calls.
 
 #### 5. Long-term Memory & Knowledge Base (5 tables)
-22. **`conversation_summaries`**: Periodic summaries of conversation threads.
-23. **`conversation_memory`**: Long-term semantic memory chunks with `vector(1536)` and HNSW index.
-24. **`knowledge_bases`**: Document collections.
-25. **`knowledge_documents`**: Uploaded clinical and policy files (PDF/DOCX).
-26. **`knowledge_chunks`**: Vectorized document chunks with `vector(1536)` and HNSW index.
+23. **`conversation_summaries`**: Periodic summaries of conversation threads.
+24. **`conversation_memory`**: Long-term semantic memory chunks with `vector(1536)` and HNSW index.
+25. **`knowledge_bases`**: Document collections.
+26. **`knowledge_documents`**: Uploaded clinical and policy files (PDF/DOCX).
+27. **`knowledge_chunks`**: Vectorized document chunks with `vector(1536)` and HNSW index.
 
 #### 6. Campaigns & Re-engagement (3 tables)
-27. **`campaign_templates`**: Marketing templates with Instagram Reel URLs and thumbnails.
-28. **`campaigns`**: Scheduled campaigns with targeting rules and delivery metrics.
-29. **`campaign_deliveries`**: Recipient deliveries with eligibility flags and attempt counters (`uq_campaign_recipient`).
+28. **`campaign_templates`**: Marketing templates with Instagram Reel URLs and thumbnails.
+29. **`campaigns`**: Scheduled campaigns with targeting rules and delivery metrics.
+30. **`campaign_deliveries`**: Recipient deliveries with eligibility flags and attempt counters (`uq_campaign_recipient`).
 
 #### 7. Automations & Background Execution (3 tables)
-30. **`scheduled_followups`**: Durable 3-touch follow-up tasks (2h, 24h, 48h) with suppression states.
-31. **`automation_rules`**: Trigger-condition-action definitions.
-32. **`background_jobs`**: Durable queue state for Cloud Tasks / Celery asynchronous processing.
+31. **`scheduled_followups`**: Durable 3-touch follow-up tasks (2h, 24h, 48h) with suppression states.
+32. **`automation_rules`**: Trigger-condition-action definitions.
+33. **`background_jobs`**: Durable queue state for Cloud Tasks / Celery asynchronous processing.
 
 #### 8. System Settings (1 table)
-33. **`system_settings`**: Key-value JSONB settings for clinic profile, hours, and version metadata.
+34. **`system_settings`**: Key-value JSONB settings for clinic profile, hours, and version metadata.
 
 ---
 
@@ -114,15 +115,20 @@ alembic revision -m "add_new_feature"
 alembic current
 ```
 
-### Initial Migration
+### Applied Migrations
 - `backend/alembic/versions/001_initial_schema.py`:
   - Executes `CREATE EXTENSION IF NOT EXISTS vector;`
-  - Constructs all 33 tables, indexes, constraints, and foreign keys.
+  - Constructs baseline 33 tables, indexes, constraints, and foreign keys.
+- `backend/alembic/versions/002_appointment_history_and_rules.py`:
+  - Creates `appointment_history` table with chronological lifecycle tracking.
+  - Adds `duration_minutes` (default 45), `created_by_id`, and `updated_by_id` foreign keys to `appointments`.
+  - Enforces `chk_appointment_no_sunday` check constraint.
+  - Adds PostgreSQL `btree_gist` range exclusion constraint `uq_no_overlapping_active_appointments` preventing concurrent or overlapping active appointments.
 
 ---
 
 ## 4. Running Database Tests
 ```bash
 # Run the complete database and migration test suite (13 tests)
-python -m pytest backend/tests -v
+python -m pytest backend/tests/test_database.py -v
 ```

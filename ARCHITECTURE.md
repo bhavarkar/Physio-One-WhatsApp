@@ -192,4 +192,55 @@ The WhatsApp messaging layer is decoupled through a common internal provider con
    - Duplicate events are immediately dropped with HTTP 200 to prevent duplicate processing.
    - Delivery status receipts (`sent`, `delivered`, `read`, `failed`) update the target message record without creating redundant message entities.
 
+---
+
+## 8. Clinical Appointments Engine & Availability Rules (Task 6)
+
+The appointment subsystem coordinates slot generation, availability checks, state transitions, and concurrency safety:
+
+```
+  ┌────────────────────────────────────────────────────────┐
+  │   Next.js Appointments UI / WhatsApp Tool Execution     │
+  └───────────────────────────┬────────────────────────────┘
+                              │ HTTP REST (JSON)
+                              ▼
+  ┌────────────────────────────────────────────────────────┐
+  │      FastAPI Router (/api/v1/appointments)             │
+  │  (Pydantic Validation + RBAC Permission Verification)  │
+  └───────────────────────────┬────────────────────────────┘
+                              │
+                              ▼
+  ┌────────────────────────────────────────────────────────┐
+  │               AppointmentService Layer                 │
+  │  - Sunday Closure Invariant (Asia/Kolkata timezone)    │
+  │  - Operating Hours Validation (09:00 - 20:00 IST)      │
+  │  - Slot Generation (30-min steps, 45-min duration)     │
+  │  - Overlap & Conflict Detection (active bookings)      │
+  │  - Concurrency Lock (asyncio lock + pg_advisory_lock)   │
+  │  - Audit Logging & Chronological Lifecycle History     │
+  └───────────────────────────┬────────────────────────────┘
+                              │
+                              ▼
+  ┌────────────────────────────────────────────────────────┐
+  │               PostgreSQL 16 Database                   │
+  │  - appointments table with chk_appointment_no_sunday   │
+  │  - btree_gist Range Exclusion Constraint               │
+  │  - appointment_history chronological audit entries     │
+  └────────────────────────────────────────────────────────┘
+```
+
+### Key Invariants:
+1. **Authoritative Sunday Restriction**:
+   - The clinic is strictly closed on Sundays.
+   - Sunday prohibition is evaluated against the clinic's local timezone (`Asia/Kolkata` / UTC+05:30), not the server's local or UTC day.
+   - Enforced authoritatively in `AppointmentService` for both creation and rescheduling, backed by SQL CHECK constraint `chk_appointment_no_sunday`.
+2. **Double-Booking & Concurrency Strategy**:
+   - Multi-tiered defense:
+     a. Application-level per-slot in-process async locks (`_booking_locks`) serialize simultaneous requests in the same process.
+     b. PostgreSQL transaction advisory locks (`pg_advisory_xact_lock`) serialize concurrent requests across multiple worker processes.
+     c. PostgreSQL range exclusion constraint (`uq_no_overlapping_active_appointments` via `btree_gist`) provides guaranteed database-level conflict rejection for non-cancelled/non-no-show appointments.
+3. **Non-Destructive Operations & Audit History**:
+   - Appointments are never physically deleted. Cancellations preserve the record with a mandatory reason code and optional notes.
+   - Every lifecycle transition (`created`, `rescheduled`, `cancelled`, `completed`, `no_show`, `updated`) appends an immutable entry to `appointment_history` capturing timestamps, actors, and state transitions.
+
 
