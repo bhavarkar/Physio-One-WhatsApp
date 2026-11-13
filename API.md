@@ -149,3 +149,4 @@
 | `POST` | `/api/v1/updates/check` | Probe remote registry for newer release tags | `Admin`+ |
 | `POST` | `/api/v1/updates/backup` | Trigger manual pre-update database snapshot | `Super Admin` |
 | `POST` | `/api/v1/updates/apply` | Execute automated upgrade pipeline | `Super Admin` |
+

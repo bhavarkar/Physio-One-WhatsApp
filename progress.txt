@@ -4,3 +4,5 @@
 
 [2026-11-13 20:52] Started: Task 1 - Architecture Specification and Repository Scaffolding
 [2026-11-13 20:55] Completed: Task 1 - Architecture Specification and Repository Scaffolding
+[2026-11-13 21:05] Started: Task 2 - Core Database Schema and Alembic Migrations
+[2026-11-13 21:18] Completed: Task 2 - Core Database Schema and Alembic Migrations

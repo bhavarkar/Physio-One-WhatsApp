@@ -32,3 +32,4 @@ The platform handles patient communications, appointment schedules, and contact 
 ## 3. Vulnerability Reporting & Patch Policy
 - Regular dependency scanning via `pip-audit` and `npm audit`.
 - Security patches are released with PATCH version bumps (e.g. `v1.0.1`) following the automated update pipeline.
+
