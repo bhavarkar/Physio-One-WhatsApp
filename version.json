@@ -1,0 +1,9 @@
+{
+  "version": "1.0.0-draft",
+  "name": "whatsapp-ai-agent-single-org",
+  "client": "Physio One",
+  "release_channel": "development",
+  "build_date": "2026-11-13",
+  "min_compatible_db_version": "1.0.0",
+  "schema_version": 1
+}
