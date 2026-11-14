@@ -73,6 +73,11 @@ class Settings(BaseSettings):
     STORAGE_BACKEND: str = "local"
     LOCAL_STORAGE_PATH: str = "./storage"
 
+    # Scheduled Automation & Follow-ups (Task 11)
+    AUTOMATION_OUTBOUND_ENABLED: bool = False
+    AUTOMATION_WORKER_INTERVAL_SECONDS: int = 60
+    AUTOMATION_WORKER_SECRET_TOKEN: str = "default-automation-worker-secret-token"
+
 
 settings = Settings()
 

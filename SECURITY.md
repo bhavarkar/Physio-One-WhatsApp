@@ -130,6 +130,36 @@ The platform handles patient communications, appointment schedules, and contact 
   - Availability is re-validated immediately before committing mutations.
   - Inbound WhatsApp replies and autonomous mutations remain disabled at the conclusion of Task 10.
 
+### J. Durable Scheduled Automation & Outbound Kill Switch (Task 11)
+- **Mandatory Default Global Kill Switch**:
+  - `AUTOMATION_OUTBOUND_ENABLED` defaults strictly to `false` in configuration and database settings (`AutomationSettings.outbound_enabled = False`).
+  - All new automation rules default to `is_enabled = False`.
+  - An automation job never executes simply because its database record exists. Outbound transmission requires both rule-level enablement and global kill-switch activation.
+- **12-Layer Safety Pre-Flight Gate (`EligibilityService`)**:
+  - Immediately before WhatsApp transmission, every scheduled job passes through 12 non-bypassable safety gates:
+    1. Global kill-switch check (`outbound_enabled == True`).
+    2. Rule active check (`is_enabled == True`).
+    3. Emergency stop check (`emergency_stop == False`).
+    4. Contact consent check (`opted_out_all == False`).
+    5. Promotional consent check (for marketing category messages).
+    6. Human takeover check (`is_human_takeover == False`).
+    7. WhatsApp 24-hour customer service window check (requires verified approved template outside 24h).
+    8. Authoritative appointment status revalidation (cancelled/rescheduled appointments suppress pending reminders).
+    9. Inactivity revalidation (patient replies or booked appointments suppress inactive follow-up stages).
+    10. Business hours check (strictly enforces `Asia/Kolkata` 09:00–20:00 IST).
+    11. Quiet hours protection (strictly suppresses or defers messages between 21:00–09:00 IST).
+    12. Per-contact cooldown and rate limits (24-hour cooldown prevents spamming).
+- **Immutable Suppression Audit Logging**:
+  - Any blocked message is permanently recorded in `automation_suppression_logs` with the exact machine-readable reason code and contextual payload.
+- **Worker Authentication & Concurrency Leasing**:
+  - Worker cycles (`/api/v1/automations/process-due`) require authenticated staff sessions (`Owner`, `Admin`, `Operator`) or a verified `X-Worker-Token` matching `AUTOMATION_WORKER_SECRET_TOKEN`.
+  - Concurrency safety is guaranteed by row leases with `FOR UPDATE SKIP LOCKED` and automatic lease expiration recovery (default 300s timeout).
+- **Template Approval Integrity & Injection Prevention**:
+  - Outside the 24-hour service window, only templates in `APPROVED` status can be dispatched.
+  - Strict variable extraction and interpolation ensures missing variables throw `MissingTemplateVariableError` rather than sending blank or placeholder strings to patients.
+- **Zero Real WhatsApp Outbound During Testing**:
+  - Synthetic test mode (`payload["test_mode"] = True`) simulates full safety verification and state transitions without live WhatsApp API dispatch or external network egress.
+
 ---
 
 ## 3. Vulnerability Reporting & Patch Policy

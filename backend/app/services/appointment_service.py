@@ -445,6 +445,16 @@ class AppointmentService:
                     details={"error": str(exc.orig if hasattr(exc, "orig") else exc)},
                 )
 
+        # Trigger scheduled automation (Task 11)
+        try:
+            from app.services.automation_service import AutomationService
+            await AutomationService.handle_appointment_event(
+                db, "appointment_confirmed", appointment, user=current_user
+            )
+            await db.commit()
+        except Exception as auto_err:
+            logger.warning("Scheduled automation event failed: %s", auto_err)
+
         # Refresh with eager loads for clean response serialization
         return await AppointmentService.get_appointment(db, appointment.id)
 
@@ -653,6 +663,16 @@ class AppointmentService:
                     details={"error": str(exc.orig if hasattr(exc, "orig") else exc)},
                 )
 
+        # Trigger scheduled automation rescheduling (Task 11)
+        try:
+            from app.services.automation_service import AutomationService
+            await AutomationService.handle_appointment_event(
+                db, "appointment_rescheduled", appointment, user=current_user
+            )
+            await db.commit()
+        except Exception as auto_err:
+            logger.warning("Scheduled automation reschedule failed: %s", auto_err)
+
         return await AppointmentService.get_appointment(db, appointment.id)
 
     @staticmethod
@@ -719,6 +739,17 @@ class AppointmentService:
         db.add(audit)
 
         await db.commit()
+
+        # Trigger scheduled automation cancellation (Task 11)
+        try:
+            from app.services.automation_service import AutomationService
+            await AutomationService.handle_appointment_event(
+                db, "appointment_cancelled", appointment, user=current_user
+            )
+            await db.commit()
+        except Exception as auto_err:
+            logger.warning("Scheduled automation cancel failed: %s", auto_err)
+
         return await AppointmentService.get_appointment(db, appointment.id)
 
     @staticmethod
@@ -777,6 +808,17 @@ class AppointmentService:
         db.add(audit)
 
         await db.commit()
+
+        # Trigger scheduled automation completion follow-up (Task 11)
+        try:
+            from app.services.automation_service import AutomationService
+            await AutomationService.handle_appointment_event(
+                db, "appointment_completed", appointment, user=current_user
+            )
+            await db.commit()
+        except Exception as auto_err:
+            logger.warning("Scheduled automation completion follow-up failed: %s", auto_err)
+
         return await AppointmentService.get_appointment(db, appointment.id)
 
     @staticmethod
@@ -835,6 +877,17 @@ class AppointmentService:
         db.add(audit)
 
         await db.commit()
+
+        # Trigger scheduled automation no-show follow-up (Task 11)
+        try:
+            from app.services.automation_service import AutomationService
+            await AutomationService.handle_appointment_event(
+                db, "appointment_noshow", appointment, user=current_user
+            )
+            await db.commit()
+        except Exception as auto_err:
+            logger.warning("Scheduled automation no-show follow-up failed: %s", auto_err)
+
         return await AppointmentService.get_appointment(db, appointment.id)
 
     @staticmethod

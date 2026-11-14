@@ -23,6 +23,7 @@ from app.api.v1 import (
     conversations,
     ai_inbound,
     appointment_workflows,
+    automations,
 )
 from app.services.agent_service import AgentService
 from app.services.workflow_service import AppointmentWorkflowService
@@ -50,6 +51,9 @@ async def lifespan(app: FastAPI):
             async with AsyncSessionLocal() as session:
                 await AgentService.ensure_default_ai_entities(session)
                 await AppointmentWorkflowService.get_or_create_settings(session)
+                from app.services.automation_service import AutomationService
+                await AutomationService.get_or_create_settings(session)
+                await AutomationService.ensure_default_templates_and_rules(session)
         except Exception as e:
             # Non-blocking log if DB is pending migration
             import logging
@@ -124,6 +128,7 @@ api_v1_router.include_router(knowledge.router)
 api_v1_router.include_router(conversations.router)
 api_v1_router.include_router(ai_inbound.router)
 api_v1_router.include_router(appointment_workflows.router)
+api_v1_router.include_router(automations.router)
 
 app.include_router(api_v1_router)
 

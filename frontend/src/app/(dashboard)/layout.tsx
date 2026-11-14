@@ -23,6 +23,7 @@ import {
   User as UserIcon,
   Loader2,
   ChevronRight,
+  Clock,
 } from 'lucide-react';
 
 interface NavItem {
@@ -56,6 +57,12 @@ const navItems: NavItem[] = [
     name: 'Appointments',
     href: '/appointments',
     icon: Calendar,
+    requiredRoles: ['Owner', 'Admin', 'Operator'],
+  },
+  {
+    name: 'Automations',
+    href: '/automations',
+    icon: Clock,
     requiredRoles: ['Owner', 'Admin', 'Operator'],
   },
   {

@@ -229,5 +229,34 @@
 | `GET` | `/api/v1/appointment-workflows/settings` | Retrieve appointment automation policy (Mode A/B/C) and timeouts | `Viewer`+ |
 | `PATCH` | `/api/v1/appointment-workflows/settings` | Update automation policy mode, confirmation requirements, timeouts | `Admin`+ |
 
+---
+
+### O. Scheduled Automations, Reminders & Follow-ups (Task 11)
+| Method | Endpoint | Description | Role Required |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/automations/settings` | Retrieve clinic scheduling controls, kill switch state, operating hours | `Viewer`+ |
+| `PATCH` | `/api/v1/automations/settings` | Update outbound kill switch, quiet hours, business hours, retry limits | `Admin`+ |
+| `GET` | `/api/v1/automations/rules` | List all automation rules with trigger and filter details | `Viewer`+ |
+| `POST` | `/api/v1/automations/rules` | Create a custom automation rule (defaults to `is_enabled=false`) | `Admin`+ |
+| `GET` | `/api/v1/automations/rules/{id}` | Retrieve details of a specific automation rule | `Viewer`+ |
+| `PATCH` | `/api/v1/automations/rules/{id}` | Update automation rule configuration, template, or schedule | `Admin`+ |
+| `POST` | `/api/v1/automations/rules/{id}/enable` | Explicitly activate an automation rule | `Admin`+ |
+| `POST` | `/api/v1/automations/rules/{id}/disable` | Disable an automation rule | `Admin`+ |
+| `GET` | `/api/v1/automations/jobs` | List scheduled jobs with filtering by status, automation type, contact | `Viewer`+ |
+| `POST` | `/api/v1/automations/jobs` | Schedule a staff-directed patient follow-up | `Operator`+ |
+| `GET` | `/api/v1/automations/jobs/{id}` | Retrieve full details, payload, suppression reason, and idempotency key | `Viewer`+ |
+| `POST` | `/api/v1/automations/jobs/{id}/cancel` | Cancel a scheduled or queued job | `Operator`+ |
+| `POST` | `/api/v1/automations/jobs/{id}/retry` | Reset failed or suppressed job to `scheduled` for immediate retry | `Operator`+ |
+| `GET` | `/api/v1/automations/templates` | List pre-approved and draft WhatsApp HSM and utility templates | `Viewer`+ |
+| `POST` | `/api/v1/automations/templates` | Register a new WhatsApp message template | `Admin`+ |
+| `GET` | `/api/v1/automations/templates/{id}` | Retrieve specific template with extracted variable definitions | `Viewer`+ |
+| `PATCH` | `/api/v1/automations/templates/{id}` | Update template content, variables, or approval status | `Admin`+ |
+| `GET` | `/api/v1/automations/executions` | List chronological execution logs and state transitions | `Viewer`+ |
+| `GET` | `/api/v1/automations/suppressions` | List safety gate suppression logs with reason codes and details | `Viewer`+ |
+| `POST` | `/api/v1/automations/test` | Test template rendering and run complete 12-layer safety gate preview | `Operator`+ |
+| `POST` | `/api/v1/automations/process-due` | Execute worker cycle: acquire row lease (`SKIP LOCKED`) and dispatch | `Operator`+ / Worker Token |
+| `POST` | `/api/v1/automations/scan-inactivity`| Trigger 15-minute conversation inactivity evaluation scan | `Operator`+ / Worker Token |
+
+
 
 

@@ -156,6 +156,15 @@ alembic current
   - Creates `appointment_operation_idempotency`: transactional deduplication table guaranteeing once-and-only-once appointment mutations.
   - Creates `appointment_workflow_settings`: singleton automation policy configuration (`policy_mode` defaulting to `mode_a_read_only`, timeouts, and thresholds).
   - Total database tables expanded to 49.
+- `backend/alembic/versions/007_scheduled_automation.py`:
+  - Creates `automation_message_templates`: pre-approved and draft WhatsApp templates with provider, category (UTILITY/MARKETING), approval status, extracted variables, and versioning.
+  - Creates `automation_scheduled_jobs`: durable PostgreSQL-backed job queue tracking scheduled execution time, lifecycle states (`scheduled`, `eligible`, `queued`, `sending`, `sent`, `delivered`, `failed`, `cancelled`, `suppressed`), worker leasing (`locked_by`, `locked_at`, `lease_expires_at`), attempt counters, and payload snapshots.
+  - Creates `automation_execution_logs`: chronological event log recording state transitions, worker lease acquisitions, provider dispatches, and delivery updates.
+  - Creates `automation_suppression_logs`: safety gate audit trail logging the specific suppression reason (kill switch, consent opt-out, human takeover, quiet hours, business hours, cooldown) and evaluation context.
+  - Creates `automation_settings`: singleton system-level scheduling controls (`outbound_enabled` defaulting to `false`, timezone `Asia/Kolkata`, quiet hours 21:00–09:00, business hours 09:00–20:00, worker interval, and retry policies).
+  - Creates `automation_contact_cooldowns`: per-contact cooldown tracking preventing duplicate sends within configured cooldown windows (default 24h).
+  - Alters `automation_rules`: adds delay offsets, business hours windows, permitted days, timezone, provider, retry policy, and eligibility filters.
+  - Total database tables expanded to 55.
 
 ---
 

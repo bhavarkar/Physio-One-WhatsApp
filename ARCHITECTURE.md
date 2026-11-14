@@ -471,6 +471,88 @@ Confirmation Response / Shadow Draft
   - `reschedule_appointment`: Gated by workflow state and original appointment ownership.
   - `cancel_appointment`: Gated by workflow state and explicit patient confirmation.
 
+---
+
+## 12. Task 11 Architecture: Durable Scheduling, Appointment Reminders & Scheduled Follow-up Automation
+
+### Architectural Overview
+Task 11 adds a high-reliability, PostgreSQL-backed durable scheduling and background execution engine for appointment reminders, inactivity re-engagement, post-appointment follow-ups, and staff-directed messaging. It guarantees that reminders and follow-ups survive application restarts, operate strictly within clinic operating hours, and remain subject to global outbound safety kill switches.
+
+```mermaid
+flowchart TD
+    subgraph TriggerSources["Trigger Sources"]
+        ApptEvent["Appointment Lifecycle Event\n(Confirmed, Rescheduled, Cancelled, Completed, No-Show)"]
+        InactivityScan["15-Minute Conversation Scanner\n(2h Stage 1 & 5h Stage 2)"]
+        StaffAction["Staff-Controlled Follow-up\n(Dashboard UI / Manual)"]
+    end
+
+    subgraph RuleAndJobLayer["Automation Engine (PostgreSQL)"]
+        RuleEval["Rule Evaluation & Eligibility Engine"]
+        JobStore[("Durable Job Store\n(automation_scheduled_jobs)")]
+        LeaseEngine["Worker Leasing Engine\n(FOR UPDATE SKIP LOCKED)"]
+    end
+
+    subgraph SafetyGate["12-Layer Safety Pre-Flight Gate"]
+        KillSwitch{"Global Kill Switch\n(AUTOMATION_OUTBOUND_ENABLED)"}
+        Consent{"Patient Consent & Opt-Out"}
+        Takeover{"Human Takeover Active?"}
+        Window{"WhatsApp 24h Service Window"}
+        BizHours{"Asia/Kolkata Business Hours & Quiet Hours"}
+        Cooldown{"Per-Contact Cooldown & Deduplication"}
+    end
+
+    subgraph Dispatcher["Outbound Dispatcher"]
+        TemplateRender["Template Variable Interpolation & Validation"]
+        OutboundGateway["WhatsApp Outbound Dispatcher\n(Meta Cloud API / YCloud)"]
+        AuditLogs[("Audit & Suppression Logs\n(automation_execution_logs / automation_suppression_logs)")]
+    end
+
+    ApptEvent --> RuleEval
+    InactivityScan --> RuleEval
+    StaffAction --> JobStore
+    RuleEval --> JobStore
+
+    JobStore --> LeaseEngine
+    LeaseEngine --> KillSwitch
+    KillSwitch -->|Allowed| Consent
+    Consent -->|Allowed| Takeover
+    Takeover -->|Allowed| Window
+    Window -->|Allowed| BizHours
+    BizHours -->|Allowed| Cooldown
+    Cooldown -->|Eligible| TemplateRender
+
+    TemplateRender --> OutboundGateway
+    OutboundGateway --> AuditLogs
+
+    KillSwitch -.->|Blocked| AuditLogs
+    Consent -.->|Blocked| AuditLogs
+    Takeover -.->|Blocked| AuditLogs
+    BizHours -.->|Deferred| JobStore
+```
+
+### Key Subsystems & Lifecycle:
+1. **Durable Job Store (`automation_scheduled_jobs`)**:
+   - Stores scheduled time in UTC with explicit timezone provenance (`Asia/Kolkata`).
+   - Tracks persistent state: `scheduled` → `eligible` → `queued` → `sending` → `sent` / `delivered` / `read` / `failed` / `cancelled` / `suppressed` / `dead_letter` / `unknown_delivery`.
+   - Supports transactional creation, superseding of reminders on rescheduling, and automatic cancellation upon appointment cancellation.
+2. **Worker Leasing & Lease Recovery (`AutomationWorkerService`)**:
+   - Concurrency-safe row leasing using `SELECT ... FOR UPDATE SKIP LOCKED` (with database-agnostic fallback for SQLite in test suites).
+   - Lease timeout mechanism (default 300s): crashed or hung workers automatically forfeit locks, and expired leases are recovered cleanly.
+   - Exponential retry backoff: retries failed network calls with geometric delay and automatic dead-lettering after maximum attempts (default 5).
+3. **12-Layer Safety Gate (`EligibilityService`)**:
+   - Global kill switch (`AUTOMATION_OUTBOUND_ENABLED=false` mandatory default).
+   - Recipient consent and explicit opt-out (`opted_out_all`, `opted_out_promotions`).
+   - Human takeover suppression (no automated messaging while clinic staff is actively conversing).
+   - WhatsApp 24-hour customer service window enforcement (requires verified HSM template outside 24h).
+   - Strict `Asia/Kolkata` operating hours (09:00–20:00 IST), quiet hours (21:00–09:00 IST), and Sunday closure deferrals.
+   - Per-contact 24h rate limiting and cooldown deduplication.
+4. **WhatsApp Template Engine (`TemplateService`)**:
+   - Template validation ensuring templates are in `APPROVED` status before sending outside the 24-hour customer-service window.
+   - Strict variable substitution with `MissingTemplateVariableError` preventing malformed or placeholder text from reaching patients.
+5. **Staff Dashboard (`frontend/src/app/(dashboard)/automations/page.tsx`)**:
+   - Overview metrics, kill-switch banner with confirmation modal, rule activation controls, scheduled job monitoring, job cancellation/retry actions, template preview, execution/suppression log inspection, and manual worker diagnostics.
+
+
 
 
 

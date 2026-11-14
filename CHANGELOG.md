@@ -10,7 +10,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0-draft] - 2026-11-14
 
 ### Added
-- **Task 10: Controlled Appointment Management Through Deepti AI Receptionist**:
+- **Task 11: Durable Scheduling, Appointment Reminders, and Patient Follow-up Automation**:
+  - Authored Alembic migration `007_scheduled_automation.py` establishing 6 new database tables and altering `automation_rules` with full SQLite and PostgreSQL cross-dialect support:
+    - `automation_message_templates`: Pre-approved and draft WhatsApp templates with provider, category (UTILITY/MARKETING), approval status, extracted variables, and versioning.
+    - `automation_scheduled_jobs`: PostgreSQL-backed durable job store tracking scheduled send time (IST/UTC), state machine (`scheduled`, `eligible`, `queued`, `sending`, `sent`, `delivered`, `failed`, `cancelled`, `suppressed`, `dead_letter`, `unknown_delivery`), worker leasing (`locked_by`, `locked_at`, `lease_expires_at`), attempt counters, and payload snapshots.
+    - `automation_execution_logs`: Chronological audit trail recording job lifecycle state transitions, worker lease acquisitions, provider dispatches, and delivery updates.
+    - `automation_suppression_logs`: Safety gate audit trail logging specific machine-readable suppression reasons and contextual payloads.
+    - `automation_settings`: Singleton system-level scheduling controls (`outbound_enabled` defaulting to `false`, timezone `Asia/Kolkata`, quiet hours 21:00–09:00, business hours 09:00–20:00, worker interval 15s, max retries 5, and contact cooldown 24h).
+    - `automation_contact_cooldowns`: Per-contact cooldown tracking preventing duplicate messages within 24h windows.
+    - Total database tables expanded to 55.
+  - Built `BusinessHoursService` (`backend/app/services/business_hours_service.py`):
+    - Timezone-aware operating rules for `Asia/Kolkata` with Windows tzdata fallback.
+    - Clinic business hours enforcement (09:00 - 20:00 IST), quiet hours protection (21:00 - 09:00 IST), and Sunday closure deferrals.
+    - Deterministic `calculate_next_eligible_send_time` advancing deferred jobs to 09:00 IST of the next valid clinic operating day.
+  - Built `TemplateService` (`backend/app/services/template_service.py`):
+    - WhatsApp 24-hour customer service window evaluation (`is_service_window_open`).
+    - Template variable extraction and strict substitution throwing `MissingTemplateVariableError` on missing parameters.
+    - Template approval status enforcement (`UnapprovedTemplateError`) ensuring outside-window messages require approved WhatsApp templates.
+  - Built `EligibilityService` (`backend/app/services/eligibility_service.py`) enforcing 12 non-bypassable pre-flight safety gates:
+    - Global kill switch (`AUTOMATION_OUTBOUND_ENABLED=false`).
+    - Rule enablement (`is_enabled`).
+    - Emergency stop flag.
+    - Global contact opt-out (`opted_out_all`).
+    - Marketing consent.
+    - Active human staff takeover (`is_human_takeover`).
+    - 24-hour WhatsApp customer service window.
+    - Authoritative appointment status revalidation (cancelled/rescheduled appointments suppress pending reminders).
+    - Inactivity revalidation (patient replies or booked appointments suppress inactive follow-up stages).
+    - Business hours window (09:00 - 20:00 IST).
+    - Quiet hours protection (21:00 - 09:00 IST).
+    - Contact cooldown and 24h duplicate send suppression.
+  - Built `AutomationService` (`backend/app/services/automation_service.py`):
+    - Transactional appointment event hooks in `AppointmentService` for Confirmed (24h/2h reminders), Rescheduled (cancels obsolete reminders, recalculates new offsets), Cancelled (cancels pending reminders), Completed (schedules post-appointment follow-up), and No-Show (schedules missed appointment follow-up).
+    - 15-minute conversation inactivity scanner evaluating 2h (Stage 1) and 5h (Stage 2) thresholds in `Asia/Kolkata` with patient activity tracking and stage deduplication.
+    - Staff follow-up creation API for individual patient messages with audit logging.
+  - Built `AutomationWorkerService` (`backend/app/services/automation_worker.py`):
+    - PostgreSQL row leasing with `FOR UPDATE SKIP LOCKED` and database-agnostic fallback.
+    - Automatic worker lease timeout recovery (300s expiration).
+    - Exponential retry backoff with dead-lettering after maximum attempts.
+    - Synthetic test mode support allowing end-to-end safety gate testing with zero real WhatsApp network egress.
+  - Built authenticated REST API router (`backend/app/api/v1/automations.py`):
+    - Rules management (`/api/v1/automations/rules/*`).
+    - Scheduled jobs monitoring, cancellation, and retry (`/api/v1/automations/jobs/*`).
+    - Templates registry (`/api/v1/automations/templates/*`).
+    - Execution and suppression logs (`/api/v1/automations/executions`, `/api/v1/automations/suppressions`).
+    - System settings and kill switch toggle (`/api/v1/automations/settings`).
+    - Test preview and safety gate evaluation (`/api/v1/automations/test`).
+    - Worker triggers (`/api/v1/automations/process-due`, `/api/v1/automations/scan-inactivity`).
+  - Built Frontend Automations Dashboard (`frontend/src/app/(dashboard)/automations/page.tsx`):
+    - Global Outbound Kill Switch banner with Admin/Owner confirmation modal.
+    - Metric overview cards (Active Rules, Pending Jobs, Suppressed, Failed).
+    - 5 tabs: Automation Rules, Scheduled Jobs, Message Templates, Logs & Suppressions, Worker & Settings.
+    - Job cancellation and immediate retry actions.
+    - Template preview modal with highlighted variable chips.
+    - Staff follow-up scheduling form.
+    - Manual worker cycle and inactivity scan diagnostic triggers.
+    - Added "Automations" navigation item with `Clock` icon to dashboard sidebar layout.
+  - Authored comprehensive backend test suite `backend/tests/test_scheduled_automation.py` covering all 26 required scenarios (24 tests):
+    - 100% backend test pass rate: 130/130 tests passing.
+  - Authored frontend test suite `frontend/src/app/(dashboard)/automations/automations.test.tsx` (6 tests):
+    - 100% frontend test pass rate: 45/45 tests passing across 11 suites.
+  - Zero TypeScript errors (`tsc --noEmit`).
+
   - Authored Alembic migration `006_appointment_ai_workflows.py` establishing 6 new database tables: `appointment_ai_workflows`, `appointment_workflow_events`, `appointment_confirmations`, `appointment_approval_requests`, `appointment_operation_idempotency`, and `appointment_workflow_settings` with full SQLite and PostgreSQL dialect support (total database tables: 49).
   - Built `AppointmentIntentExtractor` (`backend/app/services/intent_extractor.py`) parsing appointment intents (`book_appointment`, `check_availability`, `reschedule_appointment`, `cancel_appointment`, `check_appointment_status`, `request_human_assistance`) and detecting explicit confirmation ("YES", "CONFIRM") and cancellation ("NO", "CANCEL") in `Asia/Kolkata` timezone.
   - Implemented `AppointmentWorkflowService` (`backend/app/services/workflow_service.py`) governing a 12-state persistent FSM (`collecting_information`, `checking_availability`, `awaiting_slot_selection`, `awaiting_patient_confirmation`, `awaiting_staff_approval`, `ready_to_commit`, `committing`, `confirmed`, `cancelled`, `expired`, `failed`, `human_handoff`):

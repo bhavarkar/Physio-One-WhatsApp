@@ -47,10 +47,10 @@ from app.models import (
 
 
 def test_1_database_connection_and_table_count(engine):
-    """1. Test connection and verify all tables (including appointment_history and ai_retrieval_logs) are created in metadata."""
+    """1. Test connection and verify all tables (including appointment_history, ai_retrieval_logs, and scheduled automations) are created in metadata."""
     assert engine is not None
     table_names = list(Base.metadata.tables.keys())
-    assert len(table_names) == 49
+    assert len(table_names) == 55
     assert "patients" in table_names
     assert "appointments" in table_names
     assert "appointment_history" in table_names
@@ -58,6 +58,13 @@ def test_1_database_connection_and_table_count(engine):
     assert "webhook_events" in table_names
     assert "ai_agent_sessions" in table_names
     assert "ai_agent_executions" in table_names
+    assert "automation_rules" in table_names
+    assert "automation_scheduled_jobs" in table_names
+    assert "automation_message_templates" in table_names
+    assert "automation_execution_logs" in table_names
+    assert "automation_suppression_logs" in table_names
+    assert "automation_settings" in table_names
+    assert "automation_contact_cooldowns" in table_names
     assert "llm_usage_logs" in table_names
     assert "knowledge_bases" in table_names
     assert "knowledge_documents" in table_names

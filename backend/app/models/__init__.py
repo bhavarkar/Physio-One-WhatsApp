@@ -71,10 +71,16 @@ from app.models.campaign import (
     CampaignDelivery,
 )
 
-# 7. Follow-ups & Automations
+# 7. Follow-ups & Automations (Task 11)
 from app.models.followup import (
     ScheduledFollowup,
+    AutomationMessageTemplate,
     AutomationRule,
+    AutomationScheduledJob,
+    AutomationExecutionLog,
+    AutomationSuppressionLog,
+    AutomationSettings,
+    AutomationContactCooldown,
     BackgroundJob,
 )
 
@@ -132,7 +138,13 @@ __all__ = [
     "Campaign",
     "CampaignDelivery",
     "ScheduledFollowup",
+    "AutomationMessageTemplate",
     "AutomationRule",
+    "AutomationScheduledJob",
+    "AutomationExecutionLog",
+    "AutomationSuppressionLog",
+    "AutomationSettings",
+    "AutomationContactCooldown",
     "BackgroundJob",
     "SystemSetting",
 ]

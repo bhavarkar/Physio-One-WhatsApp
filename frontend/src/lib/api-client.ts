@@ -70,6 +70,121 @@ export interface WhatsAppConnection {
   updated_at: string;
 }
 
+export interface AutomationRule {
+  id: string;
+  name: string;
+  trigger_type: string;
+  condition_json: Record<string, unknown>;
+  action_type: string;
+  is_enabled: boolean;
+  automation_type: string;
+  trigger_event: string;
+  delay_minutes: number;
+  business_hours_only: boolean;
+  start_hour: string;
+  end_hour: string;
+  permitted_days: number[];
+  timezone: string;
+  template_id?: string | null;
+  template_name?: string | null;
+  fallback_body?: string | null;
+  provider: string;
+  max_sends_per_contact: number;
+  cooldown_hours: number;
+  retry_policy: Record<string, unknown>;
+  eligibility_filters: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AutomationScheduledJob {
+  id: string;
+  rule_id?: string | null;
+  rule_name?: string | null;
+  automation_type: string;
+  contact_id: string;
+  contact_phone?: string | null;
+  contact_name?: string | null;
+  conversation_id?: string | null;
+  appointment_id?: string | null;
+  patient_id?: string | null;
+  scheduled_for: string;
+  status: string;
+  suppression_reason?: string | null;
+  suppression_details?: Record<string, unknown> | null;
+  payload: Record<string, unknown>;
+  rendered_message?: string | null;
+  template_id?: string | null;
+  template_name?: string | null;
+  provider: string;
+  provider_message_id?: string | null;
+  attempt_count: number;
+  max_attempts: number;
+  last_attempt_at?: string | null;
+  next_retry_at?: string | null;
+  idempotency_key: string;
+  completed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AutomationMessageTemplate {
+  id: string;
+  name: string;
+  provider: string;
+  language: string;
+  category: string;
+  approval_status: string;
+  body: string;
+  variables: string[];
+  version: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AutomationExecutionLog {
+  id: string;
+  job_id: string;
+  rule_id?: string | null;
+  contact_id: string;
+  automation_type: string;
+  action: string;
+  status_before?: string | null;
+  status_after?: string | null;
+  provider?: string | null;
+  provider_message_id?: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface AutomationSuppressionLog {
+  id: string;
+  job_id?: string | null;
+  rule_id?: string | null;
+  contact_id: string;
+  reason: string;
+  details: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface AutomationSettings {
+  id: string;
+  outbound_enabled: boolean;
+  default_timezone: string;
+  quiet_hours_start: string;
+  quiet_hours_end: string;
+  business_hours_start: string;
+  business_hours_end: string;
+  worker_scan_interval_seconds: number;
+  max_retries: number;
+  default_cooldown_hours: number;
+  rate_limit_per_minute: number;
+  emergency_stop: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface RegisteredTool {
   name: string;
   description: string;
@@ -143,6 +258,121 @@ export interface AIAgent {
   rag_top_k?: number;
   current_version: number;
   is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AutomationRule {
+  id: string;
+  name: string;
+  trigger_type: string;
+  condition_json: Record<string, unknown>;
+  action_type: string;
+  is_enabled: boolean;
+  automation_type: string;
+  trigger_event: string;
+  delay_minutes: number;
+  business_hours_only: boolean;
+  start_hour: string;
+  end_hour: string;
+  permitted_days: number[];
+  timezone: string;
+  template_id?: string | null;
+  template_name?: string | null;
+  fallback_body?: string | null;
+  provider: string;
+  max_sends_per_contact: number;
+  cooldown_hours: number;
+  retry_policy: Record<string, unknown>;
+  eligibility_filters: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AutomationScheduledJob {
+  id: string;
+  rule_id?: string | null;
+  rule_name?: string | null;
+  automation_type: string;
+  contact_id: string;
+  contact_phone?: string | null;
+  contact_name?: string | null;
+  conversation_id?: string | null;
+  appointment_id?: string | null;
+  patient_id?: string | null;
+  scheduled_for: string;
+  status: string;
+  suppression_reason?: string | null;
+  suppression_details?: Record<string, unknown> | null;
+  payload: Record<string, unknown>;
+  rendered_message?: string | null;
+  template_id?: string | null;
+  template_name?: string | null;
+  provider: string;
+  provider_message_id?: string | null;
+  attempt_count: number;
+  max_attempts: number;
+  last_attempt_at?: string | null;
+  next_retry_at?: string | null;
+  idempotency_key: string;
+  completed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AutomationMessageTemplate {
+  id: string;
+  name: string;
+  provider: string;
+  language: string;
+  category: string;
+  approval_status: string;
+  body: string;
+  variables: string[];
+  version: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AutomationExecutionLog {
+  id: string;
+  job_id: string;
+  rule_id?: string | null;
+  contact_id: string;
+  automation_type: string;
+  action: string;
+  status_before?: string | null;
+  status_after?: string | null;
+  provider?: string | null;
+  provider_message_id?: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface AutomationSuppressionLog {
+  id: string;
+  job_id?: string | null;
+  rule_id?: string | null;
+  contact_id: string;
+  reason: string;
+  details: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface AutomationSettings {
+  id: string;
+  outbound_enabled: boolean;
+  default_timezone: string;
+  quiet_hours_start: string;
+  quiet_hours_end: string;
+  business_hours_start: string;
+  business_hours_end: string;
+  worker_scan_interval_seconds: number;
+  max_retries: number;
+  default_cooldown_hours: number;
+  rate_limit_per_minute: number;
+  emergency_stop: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -475,6 +705,121 @@ export interface AppointmentWorkflowSettings {
   max_reschedule_count: number;
   allow_cancellation_within_hours: number;
   is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AutomationRule {
+  id: string;
+  name: string;
+  trigger_type: string;
+  condition_json: Record<string, unknown>;
+  action_type: string;
+  is_enabled: boolean;
+  automation_type: string;
+  trigger_event: string;
+  delay_minutes: number;
+  business_hours_only: boolean;
+  start_hour: string;
+  end_hour: string;
+  permitted_days: number[];
+  timezone: string;
+  template_id?: string | null;
+  template_name?: string | null;
+  fallback_body?: string | null;
+  provider: string;
+  max_sends_per_contact: number;
+  cooldown_hours: number;
+  retry_policy: Record<string, unknown>;
+  eligibility_filters: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AutomationScheduledJob {
+  id: string;
+  rule_id?: string | null;
+  rule_name?: string | null;
+  automation_type: string;
+  contact_id: string;
+  contact_phone?: string | null;
+  contact_name?: string | null;
+  conversation_id?: string | null;
+  appointment_id?: string | null;
+  patient_id?: string | null;
+  scheduled_for: string;
+  status: string;
+  suppression_reason?: string | null;
+  suppression_details?: Record<string, unknown> | null;
+  payload: Record<string, unknown>;
+  rendered_message?: string | null;
+  template_id?: string | null;
+  template_name?: string | null;
+  provider: string;
+  provider_message_id?: string | null;
+  attempt_count: number;
+  max_attempts: number;
+  last_attempt_at?: string | null;
+  next_retry_at?: string | null;
+  idempotency_key: string;
+  completed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AutomationMessageTemplate {
+  id: string;
+  name: string;
+  provider: string;
+  language: string;
+  category: string;
+  approval_status: string;
+  body: string;
+  variables: string[];
+  version: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AutomationExecutionLog {
+  id: string;
+  job_id: string;
+  rule_id?: string | null;
+  contact_id: string;
+  automation_type: string;
+  action: string;
+  status_before?: string | null;
+  status_after?: string | null;
+  provider?: string | null;
+  provider_message_id?: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface AutomationSuppressionLog {
+  id: string;
+  job_id?: string | null;
+  rule_id?: string | null;
+  contact_id: string;
+  reason: string;
+  details: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface AutomationSettings {
+  id: string;
+  outbound_enabled: boolean;
+  default_timezone: string;
+  quiet_hours_start: string;
+  quiet_hours_end: string;
+  business_hours_start: string;
+  business_hours_end: string;
+  worker_scan_interval_seconds: number;
+  max_retries: number;
+  default_cooldown_hours: number;
+  rate_limit_per_minute: number;
+  emergency_stop: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -1195,7 +1540,157 @@ export const api = {
         method: 'POST',
       }
     ),
+
+  // ---------------------------------------------------------------------------
+  // Scheduled Automations (Task 11)
+  // ---------------------------------------------------------------------------
+  getAutomationSettings: () => apiFetch<AutomationSettings>('/api/v1/automations/settings'),
+
+  updateAutomationSettings: (data: Partial<AutomationSettings>) =>
+    apiFetch<AutomationSettings>('/api/v1/automations/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  getAutomationRules: (params?: { automation_type?: string; is_enabled?: boolean }) => {
+    const q = new URLSearchParams();
+    if (params?.automation_type) q.set('automation_type', params.automation_type);
+    if (params?.is_enabled !== undefined) q.set('is_enabled', String(params.is_enabled));
+    const qs = q.toString();
+    return apiFetch<{ items: AutomationRule[]; total: number }>(`/api/v1/automations/rules${qs ? `?${qs}` : ''}`);
+  },
+
+  createAutomationRule: (data: Partial<AutomationRule>) =>
+    apiFetch<AutomationRule>('/api/v1/automations/rules', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateAutomationRule: (id: string, data: Partial<AutomationRule>) =>
+    apiFetch<AutomationRule>(`/api/v1/automations/rules/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  enableAutomationRule: (id: string) =>
+    apiFetch<AutomationRule>(`/api/v1/automations/rules/${id}/enable`, {
+      method: 'POST',
+    }),
+
+  disableAutomationRule: (id: string) =>
+    apiFetch<AutomationRule>(`/api/v1/automations/rules/${id}/disable`, {
+      method: 'POST',
+    }),
+
+  getScheduledJobs: (params?: { status?: string; automation_type?: string; contact_id?: string; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.status) q.set('status', params.status);
+    if (params?.automation_type) q.set('automation_type', params.automation_type);
+    if (params?.contact_id) q.set('contact_id', params.contact_id);
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.offset) q.set('offset', String(params.offset));
+    const qs = q.toString();
+    return apiFetch<{ items: AutomationScheduledJob[]; total: number }>(`/api/v1/automations/jobs${qs ? `?${qs}` : ''}`);
+  },
+
+  createStaffScheduledJob: (data: {
+    contact_id: string;
+    scheduled_for: string;
+    reason: string;
+    message_text?: string;
+    template_id?: string;
+    conversation_id?: string;
+    appointment_id?: string;
+    provider?: string;
+  }) =>
+    apiFetch<AutomationScheduledJob>('/api/v1/automations/jobs', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  cancelScheduledJob: (id: string, reason?: string) =>
+    apiFetch<AutomationScheduledJob>(`/api/v1/automations/jobs/${id}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason || 'Cancelled by staff' }),
+    }),
+
+  retryScheduledJob: (id: string, reset_attempts: boolean = true) =>
+    apiFetch<AutomationScheduledJob>(`/api/v1/automations/jobs/${id}/retry`, {
+      method: 'POST',
+      body: JSON.stringify({ reset_attempts }),
+    }),
+
+  getAutomationTemplates: () =>
+    apiFetch<{ items: AutomationMessageTemplate[]; total: number }>('/api/v1/automations/templates'),
+
+  createAutomationTemplate: (data: Partial<AutomationMessageTemplate>) =>
+    apiFetch<AutomationMessageTemplate>('/api/v1/automations/templates', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateAutomationTemplate: (id: string, data: Partial<AutomationMessageTemplate>) =>
+    apiFetch<AutomationMessageTemplate>(`/api/v1/automations/templates/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  getAutomationExecutions: (params?: { job_id?: string; contact_id?: string; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.job_id) q.set('job_id', params.job_id);
+    if (params?.contact_id) q.set('contact_id', params.contact_id);
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.offset) q.set('offset', String(params.offset));
+    const qs = q.toString();
+    return apiFetch<{ items: AutomationExecutionLog[]; total: number }>(`/api/v1/automations/executions${qs ? `?${qs}` : ''}`);
+  },
+
+  getAutomationSuppressions: (params?: { contact_id?: string; reason?: string; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.contact_id) q.set('contact_id', params.contact_id);
+    if (params?.reason) q.set('reason', params.reason);
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.offset) q.set('offset', String(params.offset));
+    const qs = q.toString();
+    return apiFetch<{ items: AutomationSuppressionLog[]; total: number }>(`/api/v1/automations/suppressions${qs ? `?${qs}` : ''}`);
+  },
+
+  testAutomationPreview: (data: {
+    rule_id?: string;
+    template_id?: string;
+    inline_body?: string;
+    contact_id: string;
+    appointment_id?: string;
+    mock_variables?: Record<string, string>;
+  }) =>
+    apiFetch<{
+      rendered_message: string;
+      eligible: boolean;
+      suppression_reasons: string[];
+      service_window_open: boolean;
+      requires_approved_template: boolean;
+      in_business_hours: boolean;
+      in_quiet_hours: boolean;
+      next_eligible_send_time?: string | null;
+    }>('/api/v1/automations/test', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  triggerAutomationWorker: (limit: number = 20) =>
+    apiFetch<{
+      scanned_count: number;
+      locked_count: number;
+      sent_count: number;
+      suppressed_count: number;
+      failed_count: number;
+      server_time: string;
+    }>(`/api/v1/automations/process-due?limit=${limit}`, { method: 'POST' }),
+
+  triggerInactivityScan: () =>
+    apiFetch<{ newly_scheduled_count: number }>('/api/v1/automations/scan-inactivity', { method: 'POST' }),
 };
+
 
 export const apiClient = api;
 
