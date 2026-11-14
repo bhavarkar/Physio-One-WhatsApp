@@ -106,17 +106,22 @@
 
 ---
 
-### F. AI Agents, LLM Providers & Tools
+### F. AI Agents, LLM Providers & Tools (Task 7 Implementation)
 | Method | Endpoint | Description | Role Required |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/api/v1/agents` | List configured AI agents (Deepti, Follow-up, Campaign) | `Admin`+ |
-| `GET` | `/api/v1/agents/{id}` | Get agent detail, system prompt, model configurations | `Admin`+ |
-| `PUT` | `/api/v1/agents/{id}` | Update agent prompt, temperature, model assignment | `Admin`+ |
-| `GET` | `/api/v1/agents/{id}/versions`| View version history of an agent's prompt | `Admin`+ |
-| `GET` | `/api/v1/providers` | List configured LLM providers (Muse, OpenAI, Anthropic) | `Super Admin` |
-| `PUT` | `/api/v1/providers/{id}` | Update provider API keys, base URLs, and active status | `Super Admin` |
-| `GET` | `/api/v1/tools` | List registered AI tools and execution schemas | `Admin`+ |
-| `PUT` | `/api/v1/tools/{id}` | Toggle tool availability or update execution parameters | `Admin`+ |
+| `GET` | `/api/v1/llm/providers` | List all configured LLM providers with masked credentials | `Owner`, `Admin`, `Operator`, `Viewer` |
+| `POST` | `/api/v1/llm/providers` | Create a new LLM provider configuration | `Owner`, `Admin` |
+| `PUT` | `/api/v1/llm/providers/{id}` | Update provider base URL, enabled state, timeout, and API key | `Owner`, `Admin` |
+| `POST` | `/api/v1/llm/providers/{id}/test` | Perform diagnostic connection handshake test | `Owner`, `Admin` |
+| `GET` | `/api/v1/llm/models` | List all active models across providers with token costs | `Owner`, `Admin`, `Operator`, `Viewer` |
+| `GET` | `/api/v1/agents` | List configured AI agents (including Deepti receptionist) | `Owner`, `Admin`, `Operator`, `Viewer` |
+| `POST` | `/api/v1/agents` | Create a new AI agent with baseline version snapshot | `Owner`, `Admin` |
+| `GET` | `/api/v1/agents/{id}` | Get agent details, models, tools, and system prompt | `Owner`, `Admin`, `Operator`, `Viewer` |
+| `PUT` | `/api/v1/agents/{id}` | Update agent configuration and save immutable version snapshot | `Owner`, `Admin` |
+| `GET` | `/api/v1/agents/{id}/versions` | List immutable version history snapshots for an agent | `Owner`, `Admin`, `Operator`, `Viewer` |
+| `GET` | `/api/v1/agents/{id}/executions` | List chronological execution sessions and step details | `Owner`, `Admin`, `Operator`, `Viewer` |
+| `POST` | `/api/v1/agents/{id}/test` | Execute isolated agent test console prompt (safe dry run) | `Owner`, `Admin` |
+| `GET` | `/api/v1/tools` | List registered tools, Pydantic schemas, and mutation flags | `Owner`, `Admin`, `Operator`, `Viewer` |
 
 ---
 

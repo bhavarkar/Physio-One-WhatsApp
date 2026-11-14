@@ -243,4 +243,59 @@ The appointment subsystem coordinates slot generation, availability checks, stat
    - Appointments are never physically deleted. Cancellations preserve the record with a mandatory reason code and optional notes.
    - Every lifecycle transition (`created`, `rescheduled`, `cancelled`, `completed`, `no_show`, `updated`) appends an immutable entry to `appointment_history` capturing timestamps, actors, and state transitions.
 
+---
+
+## 8. Multi-Provider LLM Gateway & Agent Runtime Architecture (Task 7)
+
+```
+   ┌────────────────────────────────────────────────────────┐
+   │             Agent Runtime & Orchestrator               │
+   │  (Deterministic Budget Assembler + Tool Dispatcher)    │
+   └───────────────────────────┬────────────────────────────┘
+                               │ Structured Execution Request
+                               ▼
+   ┌────────────────────────────────────────────────────────┐
+   │                     LLMGateway                         │
+   │  - Provider & Model Resolution                         │
+   │  - Fernet Credential Decryption                        │
+   │  - Resilient Fallback Policy (No Retries on Mutations)  │
+   │  - Usage & Cost Ledger (llm_usage_logs)                │
+   └───────────┬───────────────────────────────┬────────────┘
+               │                               │
+               ▼                               ▼
+   ┌───────────────────────┐       ┌───────────────────────┐
+   │     MuseProvider      │       │    OpenAIProvider     │
+   │  - Primary Provider   │       │  - Native Tool Calls  │
+   │  - Bearer Auth        │       │  - Streaming Support  │
+   │  - Strict Capability  │       │  - JSON Schema Output │
+   └───────────────────────┘       └───────────────────────┘
+               │                               │
+               ▼                               ▼
+   ┌───────────────────────┐       ┌───────────────────────┐
+   │   AnthropicProvider   │       │ GenericOpenAIProvider │
+   │  - Claude 3.5 Sonnet  │       │  - Local vLLM/Ollama  │
+   │  - Top-Level System   │       │  - Self-Hosted LLMs   │
+   │  - Tool Use Blocks    │       │  - OpenAI-Compatible  │
+   └───────────────────────┘       └───────────────────────┘
+```
+
+### Key Architectural Invariants:
+1. **Provider Independence**:
+   - Business services and agent orchestrators never interact directly with vendor SDKs or vendor-specific JSON formats.
+   - All input messages and responses conform to typed Pydantic contracts (`ChatMessage`, `LLMResponse`, `ToolCall`, `LLMUsage`).
+2. **Primary Provider (Muse API)**:
+   - Muse API serves as the primary clinical gateway integration.
+   - Provider interface defines configurable base URL and Bearer authentication, but adheres to verified documentation invariants: `supports_tools=False` and `supports_streaming=False` are enforced by default until Meta API documentation formally exposes those schemas.
+3. **Controlled Tool Calling & Security Boundary**:
+   - Registered tools inherit from `BaseTool` with strict Pydantic schemas, permission categories, and timeout safeguards.
+   - Clinical tools (`check_availability`, `find_patient`) integrate directly with `AppointmentService` to strictly enforce clinic invariants (Sunday closure, working hours, conflict checks).
+   - PHI protection: Patient contact numbers and sensitive identifiers are masked in agent tool execution contexts.
+   - Models are never granted arbitrary code execution, shell execution, raw SQL execution, or direct database mutations.
+4. **Immutable Agent Versioning**:
+   - Updates to agent configuration increment the agent version number and record an immutable snapshot in `ai_agent_versions`.
+   - Historical execution sessions in `ai_agent_sessions` link to the exact version snapshot active at the time of execution.
+5. **Token Accounting & Ledger**:
+   - Every LLM invocation records input, output, and total token usage along with cost calculations in `llm_usage_logs`.
+
+
 

@@ -44,6 +44,25 @@ The platform handles patient communications, appointment schedules, and contact 
 - **Public Slot Privacy**:
   - The availability endpoint (`/api/v1/appointments/availability`) returns only slot timestamps and availability status; patient identifiers, contact details, and clinical notes are never exposed.
 
+### F. Multi-Provider LLM Gateway & Agent Runtime Security (Task 7)
+- **Fernet Encryption & Masked Credentials**:
+  - All LLM API keys (`ai_providers.api_key_encrypted`) are encrypted at rest using Fernet (AES-128-CBC + HMAC-SHA256).
+  - API responses and frontend views mask API keys (e.g., `sk-proj...1234`), returning `has_api_key=true` without leaking raw secrets.
+- **Controlled Tool Execution Sandbox**:
+  - LLMs cannot execute arbitrary Python code, execute shell commands, run raw SQL, or invoke external HTTP endpoints.
+  - All tool execution occurs through an explicit registry (`BaseTool`) with strict Pydantic parameter schemas, execution timeouts, and agent whitelist permissions.
+  - Models requesting unregistered or unauthorized tools receive controlled denials recorded in execution logs.
+- **PHI Masking in Tool Execution**:
+  - Patient lookups and search tools sanitize and mask personal phone numbers in execution outputs to minimize data exposure.
+- **Mutation Boundary & Sunday Invariant**:
+  - No autonomous appointment creation, cancellation, or rescheduling is permitted in Task 7.
+  - The read-only `check_availability` tool strictly routes through `AppointmentService`, enforcing Sunday closure and clinic operating hours (09:00 - 20:00 IST).
+- **Safe Fallback Policy**:
+  - Fallback provider invocation is disabled by default, triggers only on retryable network or rate-limit errors, and is explicitly forbidden if prior execution steps triggered mutating side-effects.
+- **Context Budget Truncation & Loop Defense**:
+  - Deterministic context truncation prevents prompt token overflow, always preserving the core system prompt and latest user inquiry.
+  - Execution runtime enforces strict step limits (`max_execution_steps`) and timeouts (`execution_timeout_seconds`) to eliminate infinite tool execution loops.
+
 ---
 
 ## 3. Vulnerability Reporting & Patch Policy

@@ -10,7 +10,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import async_engine, Base
 import app.models  # noqa: F401
-from app.api.v1 import auth, users, whatsapp, webhooks, appointments
+from app.api.v1 import auth, users, whatsapp, webhooks, appointments, llm, agents, tools
+from app.services.agent_service import AgentService
+from app.core.database import AsyncSessionLocal
 from app.services.appointment_service import (
     AppointmentServiceError,
     SundayRestrictionError,
@@ -29,6 +31,14 @@ async def lifespan(app: FastAPI):
     if async_engine.dialect.name == "sqlite":
         async with async_engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+    if settings.ENVIRONMENT != "testing":
+        try:
+            async with AsyncSessionLocal() as session:
+                await AgentService.ensure_default_ai_entities(session)
+        except Exception as e:
+            # Non-blocking log if DB is pending migration
+            import logging
+            logging.getLogger("physio_one").warning(f"Default AI initialization deferred: {e}")
     yield
     await async_engine.dispose()
 
@@ -92,6 +102,9 @@ api_v1_router.include_router(users.router)
 api_v1_router.include_router(whatsapp.router)
 api_v1_router.include_router(webhooks.router)
 api_v1_router.include_router(appointments.router)
+api_v1_router.include_router(llm.router)
+api_v1_router.include_router(agents.router)
+api_v1_router.include_router(tools.router)
 
 app.include_router(api_v1_router)
 

@@ -10,6 +10,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0-draft] - 2026-11-14
 
 ### Added
+- **Task 7: Multi-Provider LLM Gateway & Agent Runtime**:
+  - Implemented Alembic migration `003_ai_agent_sessions_and_usage.py` creating `ai_agent_sessions`, `ai_agent_executions`, `llm_usage_logs` and altering `ai_providers`, `ai_agents`, `ai_agent_versions`, and `ai_tool_executions` (total database tables: 37).
+  - Built typed Pydantic schemas (`backend/app/llm/schemas.py`) for unified LLM interactions: `ChatMessage`, `MessageRole`, `ToolCall`, `ToolDefinition`, `LLMOptions`, `LLMUsage`, `LLMResponse`, `LLMStreamChunk`, and `ProviderCapabilities`.
+  - Implemented typed exception hierarchy (`backend/app/llm/errors.py`) with retryable error classification (`LLMError`, `LLMAuthenticationError`, `LLMRateLimitError`, `LLMTimeoutError`, `LLMServiceUnavailableError`, `LLMConfigurationError`, `LLMUnsupportedCapabilityError`).
+  - Created provider-agnostic base adapter contract `BaseLLMProvider` (`backend/app/llm/base.py`) standardizing `generate()`, `stream()`, `validate_connection()`, `mask_api_key()`, and `normalize_error()`.
+  - Implemented `MuseProvider` (`backend/app/llm/providers/muse.py`) as the primary gateway integration with Bearer authentication, configurable base URL, and strict capability reporting (`supports_tools=False`, `supports_streaming=False` with diagnostic feedback identifying unverified proprietary schemas per verified documentation).
+  - Implemented `OpenAIProvider` (`backend/app/llm/providers/openai.py`) with tool-calling schema translation, structured JSON output, streaming, and error normalization.
+  - Implemented `AnthropicProvider` (`backend/app/llm/providers/anthropic.py`) with Anthropic Messages API format, top-level system prompt isolation, and `tool_use` / `tool_result` translation.
+  - Implemented `GenericOpenAIProvider` (`backend/app/llm/providers/generic_openai.py`) for local and self-hosted models (Ollama, vLLM, LocalAI).
+  - Built unified `LLMGateway` (`backend/app/llm/gateway.py`) resolving provider adapters, decrypting stored credentials via Fernet, managing resilient fallback chains (disabled by default, retryable errors only, forbidden on mutating tool steps), and recording token and cost accounting in `llm_usage_logs`.
+  - Built extensible tool-calling infrastructure: `BaseTool` (`backend/app/tools/base.py`), `ToolRegistry` (`backend/app/tools/registry.py`), and `ToolDispatcher` (`backend/app/tools/dispatcher.py`) enforcing agent whitelist, timeout safeguards, and execution auditing in `ai_tool_executions`.
+  - Implemented clinical tools: `CheckAvailabilityTool` (`backend/app/tools/clinical/availability.py`) querying `AppointmentService.get_daily_availability` (strictly enforcing Sunday closure, operating hours, and active slot conflicts) and `FindPatientTool` (`backend/app/tools/clinical/patient.py`) with PHI phone masking.
+  - Implemented `AgentRuntime` (`backend/app/agents/runtime.py`) featuring deterministic context assembly (preserving system instructions and user message while truncating historical turns to context token budget), multi-step tool execution loop with max-step and timeout guards, and session state transitions (`pending`, `running`, `completed`, `failed`).
+  - Implemented `AgentService` (`backend/app/services/agent_service.py`) with startup initialization of default AI entities (seeding `muse`, `openai`, `anthropic`, `generic_openai`, models, tools, and the draft **Deepti** receptionist agent v1), provider configuration management, agent CRUD with immutable version snapshots, and isolated test console execution.
+  - Built REST API routers mounted in `backend/app/main.py`:
+    - `/api/v1/llm`: Provider management, diagnostic connection test, active model listing with pricing.
+    - `/api/v1/agents`: Agent CRUD, immutable version history snapshots, execution session logs, and isolated test execution.
+    - `/api/v1/tools`: Registered tool schema catalog.
+  - Built frontend typed API client methods in `frontend/src/lib/api-client.ts`.
+  - Built complete interactive AI Agent management dashboard (`frontend/src/app/(dashboard)/agents/page.tsx`) with agent cards, Deepti badge, create/edit modals, system prompt editor, version history modal, execution sessions log, and isolated test console with metrics and tool inspector.
+  - Enhanced settings dashboard (`frontend/src/app/(dashboard)/settings/page.tsx`) with tabbed switcher between WhatsApp Integrations and LLM Gateway Providers (viewing provider health, masked keys, models, connection test diagnostics, and configure modal) while preserving 100% of existing WhatsApp UI and tests.
+  - Added comprehensive backend test suites: `backend/tests/test_llm_gateway.py` (9 tests), `backend/tests/test_agent_runtime.py` (8 tests), `backend/tests/test_ai_api.py` (4 tests) — total backend suite: 68/68 passing (100%).
+  - Added frontend test suite `frontend/src/app/(dashboard)/agents/agents.test.tsx` (3 tests) — total frontend suite: 25/25 passing across 8 suites (100%).
+  - Clean TypeScript check with zero errors (`tsc --noEmit`).
+
 - **Task 6: Clinical Appointments Engine & Availability Rules**:
   - Implemented `AppointmentHistory` SQLAlchemy model (`backend/app/models/patient.py`) for comprehensive chronological tracking of appointment lifecycle events (`created`, `rescheduled`, `cancelled`, `completed`, `no_show`, `updated`).
   - Extended `Appointment` model with `duration_minutes` (default 45), `created_by_id`, and `updated_by_id` audit foreign keys.

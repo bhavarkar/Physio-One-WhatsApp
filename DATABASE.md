@@ -124,6 +124,15 @@ alembic current
   - Adds `duration_minutes` (default 45), `created_by_id`, and `updated_by_id` foreign keys to `appointments`.
   - Enforces `chk_appointment_no_sunday` check constraint.
   - Adds PostgreSQL `btree_gist` range exclusion constraint `uq_no_overlapping_active_appointments` preventing concurrent or overlapping active appointments.
+- `backend/alembic/versions/003_ai_agent_sessions_and_usage.py`:
+  - Creates `ai_agent_sessions` table tracking conversation and standalone agent execution sessions, lifecycle states, and aggregated metrics.
+  - Creates `ai_agent_executions` table capturing step-level execution details, latency, model usage, tool calls, and LLM responses.
+  - Creates `llm_usage_logs` table tracking prompt, completion, total token counts, estimated financial costs, and latency across providers.
+  - Alters `ai_providers` adding `is_default`, `encrypted_credentials`, `default_model`, and `health_status`.
+  - Alters `ai_agents` adding `fallback_model_id`, `max_execution_steps`, and `execution_timeout_seconds`.
+  - Alters `ai_agent_versions` adding `max_tokens` and `allowed_tools`.
+  - Alters `ai_tool_executions` adding `session_id` foreign key.
+  - Total database tables expanded to 37.
 
 ---
 

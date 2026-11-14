@@ -70,6 +70,151 @@ export interface WhatsAppConnection {
   updated_at: string;
 }
 
+export interface RegisteredTool {
+  name: string;
+  description: string;
+  parameters_schema: Record<string, any>;
+  requires_permission: string;
+  is_mutation: boolean;
+  is_idempotent: boolean;
+  timeout_seconds: number;
+  is_enabled: boolean;
+}
+
+export interface AIModel {
+  id: string;
+  provider_id: string;
+  provider_name: string;
+  model_identifier: string;
+  display_name: string;
+  supports_tools: boolean;
+  supports_vision: boolean;
+  max_context_tokens: number;
+  created_at: string;
+}
+
+export interface AIProvider {
+  id: string;
+  name: string;
+  base_url: string;
+  has_api_key: boolean;
+  masked_api_key: string;
+  is_enabled: boolean;
+  config?: Record<string, any> | null;
+  health_status: string;
+  last_validated_at?: string | null;
+  last_validation_result?: Record<string, any> | null;
+  models: AIModel[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AIProviderTestResult {
+  is_valid: boolean;
+  status: string;
+  latency_ms: number;
+  error_message?: string | null;
+  detected_models: string[];
+  capabilities: Record<string, boolean>;
+  details?: Record<string, any> | null;
+}
+
+export interface AIAgent {
+  id: string;
+  name: string;
+  description: string | null;
+  primary_model_id: string;
+  primary_model_identifier: string;
+  primary_provider_name: string;
+  fallback_model_id: string | null;
+  fallback_model_identifier: string | null;
+  fallback_provider_name: string | null;
+  system_prompt: string;
+  temperature: number;
+  max_tokens: number;
+  supported_languages: string[];
+  allowed_tools: string[];
+  max_execution_steps: number;
+  execution_timeout_seconds: number;
+  context_budget_tokens: number;
+  current_version: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AIAgentVersion {
+  id: string;
+  agent_id: string;
+  version_number: number;
+  system_prompt: string;
+  temperature: number;
+  max_tokens?: number | null;
+  model_identifier?: string | null;
+  allowed_tools?: string[] | null;
+  max_execution_steps?: number | null;
+  changed_by_user_id?: string | null;
+  change_summary?: string | null;
+  created_at: string;
+}
+
+export interface AIAgentTestResponse {
+  session_id: string;
+  agent_id: string;
+  agent_name: string;
+  status: string;
+  response_text: string;
+  steps: Array<{
+    step: number;
+    duration_ms: number;
+    tool_calls_count: number;
+    has_content: boolean;
+  }>;
+  tool_calls: Array<{
+    step: number;
+    id: string;
+    name: string;
+    arguments: Record<string, any>;
+    result: Record<string, any>;
+  }>;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_tokens: number;
+  duration_ms: number;
+  model: string;
+  provider: string;
+  error_message?: string | null;
+}
+
+export interface AgentExecutionStep {
+  step_number: number;
+  status: string;
+  response_text?: string | null;
+  tool_calls?: Array<any> | null;
+  input_tokens: number;
+  output_tokens: number;
+  duration_ms: number;
+  error_message?: string | null;
+  created_at: string;
+}
+
+export interface AgentExecutionSession {
+  id: string;
+  agent_id: string;
+  agent_version_id?: string | null;
+  conversation_id?: string | null;
+  status: string;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_execution_steps: number;
+  error_message?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  duration_ms?: number | null;
+  created_at: string;
+  executions: AgentExecutionStep[];
+}
+
 export interface AppointmentHistory {
   id: string;
   appointment_id: string;
@@ -475,6 +620,92 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data || {}),
     }),
+
+  // --- LLM Providers & Models ---
+  getLLMProviders: () => apiFetch<AIProvider[]>('/api/v1/llm/providers'),
+
+  createLLMProvider: (data: { name: string; base_url: string; api_key: string; is_enabled?: boolean; config?: Record<string, any> }) =>
+    apiFetch<AIProvider>('/api/v1/llm/providers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateLLMProvider: (providerId: string, data: { base_url?: string; api_key?: string; is_enabled?: boolean; config?: Record<string, any> }) =>
+    apiFetch<AIProvider>(`/api/v1/llm/providers/${providerId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  testLLMProvider: (providerId: string) =>
+    apiFetch<AIProviderTestResult>(`/api/v1/llm/providers/${providerId}/test`, {
+      method: 'POST',
+    }),
+
+  getLLMModels: () => apiFetch<AIModel[]>('/api/v1/llm/models'),
+
+  // --- AI Agents & Versioning ---
+  getAgents: () => apiFetch<AIAgent[]>('/api/v1/agents'),
+
+  getAgent: (agentId: string) => apiFetch<AIAgent>(`/api/v1/agents/${agentId}`),
+
+  createAgent: (data: {
+    name: string;
+    description?: string;
+    primary_model_id: string;
+    fallback_model_id?: string;
+    system_prompt: string;
+    temperature?: number;
+    max_tokens?: number;
+    allowed_tools?: string[];
+    max_execution_steps?: number;
+    execution_timeout_seconds?: number;
+    context_budget_tokens?: number;
+    is_active?: boolean;
+  }) =>
+    apiFetch<AIAgent>('/api/v1/agents', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateAgent: (
+    agentId: string,
+    data: {
+      name?: string;
+      description?: string;
+      primary_model_id?: string;
+      fallback_model_id?: string;
+      system_prompt?: string;
+      temperature?: number;
+      max_tokens?: number;
+      allowed_tools?: string[];
+      max_execution_steps?: number;
+      execution_timeout_seconds?: number;
+      context_budget_tokens?: number;
+      is_active?: boolean;
+      change_summary?: string;
+    }
+  ) =>
+    apiFetch<AIAgent>(`/api/v1/agents/${agentId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  getAgentVersions: (agentId: string) =>
+    apiFetch<AIAgentVersion[]>(`/api/v1/agents/${agentId}/versions`),
+
+  testAgent: (agentId: string, data: { message: string; allow_fallback?: boolean }) =>
+    apiFetch<AIAgentTestResponse>(`/api/v1/agents/${agentId}/test`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getAgentExecutions: (agentId: string, limit = 20, offset = 0) =>
+    apiFetch<AgentExecutionSession[]>(`/api/v1/agents/${agentId}/executions?limit=${limit}&offset=${offset}`),
+
+  getExecutionSessionDetail: (executionId: string) =>
+    apiFetch<AgentExecutionSession>(`/api/v1/agents/executions/${executionId}`),
+
+  getTools: () => apiFetch<RegisteredTool[]>('/api/v1/tools'),
 };
 
 export const apiClient = api;

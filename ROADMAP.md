@@ -31,10 +31,10 @@ Each phase corresponds to discrete tasks defined in `PRD.md`:
 - **Task 2**: Core Database Schema & Migrations
 - **Task 3**: Authentication & RBAC API
 - **Task 4**: Next.js Dashboard Foundation & Auth Shell
-- **Task 5**: WhatsApp Provider Integration (Meta Cloud API & YCloud)
-- **Task 6**: Clinical Appointments Engine & Availability Rules
-- **Task 7**: Multi-Provider LLM Gateway & Agent Runtime
-- **Task 8**: pgvector Memory & Tool Registry
+- **Task 5**: WhatsApp Provider Integration (Meta Cloud API & YCloud) [COMPLETED]
+- **Task 6**: Clinical Appointments Engine & Availability Rules [COMPLETED]
+- **Task 7**: Multi-Provider LLM Gateway & Agent Runtime [COMPLETED]
+- **Task 8**: pgvector Memory & Tool Registry [NEXT]
 - **Task 9**: Deepti Receptionist & Clinic Rules Engine
 - **Task 10**: 3-Touch Follow-Up Engine
 - **Task 11**: Instagram Re-engagement Campaigns
