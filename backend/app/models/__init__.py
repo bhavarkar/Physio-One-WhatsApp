@@ -42,6 +42,7 @@ from app.models.memory import (
     KnowledgeBase,
     KnowledgeDocument,
     KnowledgeChunk,
+    AIRetrievalLog,
 )
 
 # 6. Campaigns
@@ -96,6 +97,7 @@ __all__ = [
     "KnowledgeBase",
     "KnowledgeDocument",
     "KnowledgeChunk",
+    "AIRetrievalLog",
     "CampaignTemplate",
     "Campaign",
     "CampaignDelivery",

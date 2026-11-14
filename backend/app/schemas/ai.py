@@ -96,6 +96,10 @@ class AIAgentResponse(BaseModel):
     context_budget_tokens: int
     current_version: int
     is_active: bool
+    knowledge_base_id: Optional[uuid.UUID] = None
+    rag_enabled: bool = False
+    rag_similarity_threshold: float = 0.70
+    rag_top_k: int = 3
     created_at: datetime
     updated_at: datetime
 
@@ -117,6 +121,10 @@ class AIAgentCreate(BaseModel):
     execution_timeout_seconds: int = Field(default=60, ge=5, le=300)
     context_budget_tokens: int = Field(default=4000, ge=500, le=128000)
     is_active: bool = True
+    knowledge_base_id: Optional[uuid.UUID] = None
+    rag_enabled: bool = False
+    rag_similarity_threshold: float = Field(default=0.70, ge=0.0, le=1.0)
+    rag_top_k: int = Field(default=3, ge=1, le=10)
 
 
 class AIAgentUpdate(BaseModel):
@@ -132,6 +140,10 @@ class AIAgentUpdate(BaseModel):
     execution_timeout_seconds: Optional[int] = Field(default=None, ge=5, le=300)
     context_budget_tokens: Optional[int] = Field(default=None, ge=500, le=128000)
     is_active: Optional[bool] = None
+    knowledge_base_id: Optional[uuid.UUID] = None
+    rag_enabled: Optional[bool] = None
+    rag_similarity_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    rag_top_k: Optional[int] = Field(default=None, ge=1, le=10)
     change_summary: Optional[str] = Field(default=None, description="Reason for prompt/configuration update")
 
 
@@ -166,6 +178,7 @@ class AIAgentTestResponse(BaseModel):
     response_text: str
     steps: List[Dict[str, Any]] = []
     tool_calls: List[Dict[str, Any]] = []
+    rag_sources: List[Dict[str, Any]] = []
     total_input_tokens: int
     total_output_tokens: int
     total_tokens: int

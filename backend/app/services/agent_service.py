@@ -137,7 +137,22 @@ class AgentService:
                 else:
                     created_models[m_spec["ident"]] = existing_idents[m_spec["ident"]]
 
-        # 3. Seed Deepti Agent Draft
+        # 3. Seed Default Clinic Knowledge Base
+        from app.models.memory import KnowledgeBase
+        kb_stmt = select(KnowledgeBase).where(KnowledgeBase.name == "Physio One Clinic Guide")
+        default_kb = (await db.execute(kb_stmt)).scalar_one_or_none()
+        if not default_kb:
+            default_kb = KnowledgeBase(
+                name="Physio One Clinic Guide",
+                description="Verified Physio One clinical guidelines, services, operating hours, and booking rules.",
+                is_active=True,
+                embedding_model="text-embedding-3-small",
+                vector_dimension=1536,
+            )
+            db.add(default_kb)
+            await db.flush()
+
+        # 4. Seed Deepti Agent Draft
         deepti_stmt = select(AIAgent).where(AIAgent.name == "Deepti")
         deepti = (await db.execute(deepti_stmt)).scalar_one_or_none()
 
@@ -155,12 +170,16 @@ class AgentService:
                 temperature=0.20,
                 max_tokens=1000,
                 supported_languages=["en", "hi", "hinglish"],
-                allowed_tools=["check_availability", "find_patient"],
+                allowed_tools=["check_availability", "find_patient", "search_clinic_knowledge"],
                 max_execution_steps=5,
                 execution_timeout_seconds=60,
                 context_budget_tokens=4000,
                 current_version=1,
                 is_active=True,
+                knowledge_base_id=default_kb.id,
+                rag_enabled=True,
+                rag_similarity_threshold=0.65,
+                rag_top_k=3,
             )
             db.add(deepti)
             await db.flush()
@@ -173,7 +192,7 @@ class AgentService:
                 temperature=0.20,
                 max_tokens=1000,
                 model_identifier=primary_model.model_identifier,
-                allowed_tools=["check_availability", "find_patient"],
+                allowed_tools=["check_availability", "find_patient", "search_clinic_knowledge"],
                 max_execution_steps=5,
                 change_summary="Initial system configuration and persona initialization.",
             )
@@ -365,6 +384,10 @@ class AgentService:
             context_budget_tokens=data.context_budget_tokens,
             current_version=1,
             is_active=data.is_active,
+            knowledge_base_id=data.knowledge_base_id,
+            rag_enabled=data.rag_enabled,
+            rag_similarity_threshold=data.rag_similarity_threshold,
+            rag_top_k=data.rag_top_k,
         )
         db.add(agent)
         await db.flush()
@@ -446,6 +469,18 @@ class AgentService:
 
         if data.is_active is not None:
             agent.is_active = data.is_active
+
+        if data.knowledge_base_id is not None:
+            agent.knowledge_base_id = data.knowledge_base_id
+
+        if data.rag_enabled is not None:
+            agent.rag_enabled = data.rag_enabled
+
+        if data.rag_similarity_threshold is not None:
+            agent.rag_similarity_threshold = data.rag_similarity_threshold
+
+        if data.rag_top_k is not None:
+            agent.rag_top_k = data.rag_top_k
 
         if should_create_version:
             new_version_num = (agent.current_version or 1) + 1

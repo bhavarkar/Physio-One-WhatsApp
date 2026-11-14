@@ -58,6 +58,10 @@ def serialize_agent(a: AIAgent) -> AIAgentResponse:
         context_budget_tokens=a.context_budget_tokens or 4000,
         current_version=a.current_version or 1,
         is_active=a.is_active,
+        knowledge_base_id=a.knowledge_base_id,
+        rag_enabled=a.rag_enabled or False,
+        rag_similarity_threshold=float(a.rag_similarity_threshold or 0.70),
+        rag_top_k=a.rag_top_k or 3,
         created_at=a.created_at,
         updated_at=a.updated_at,
     )
@@ -226,6 +230,7 @@ async def test_agent_console(
             response_text=result.response_text or "",
             steps=result.steps,
             tool_calls=result.tool_calls,
+            rag_sources=result.rag_sources,
             total_input_tokens=result.total_input_tokens,
             total_output_tokens=result.total_output_tokens,
             total_tokens=result.total_tokens,

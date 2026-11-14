@@ -14,6 +14,7 @@ import {
   Calendar,
   Megaphone,
   Bot,
+  BookOpen,
   UserCog,
   Settings,
   LogOut,
@@ -68,6 +69,12 @@ const navItems: NavItem[] = [
     href: '/agents',
     icon: Bot,
     requiredRoles: ['Owner', 'Admin'],
+  },
+  {
+    name: 'Knowledge Base',
+    href: '/knowledge',
+    icon: BookOpen,
+    requiredRoles: ['Owner', 'Admin', 'Operator'],
   },
   {
     name: 'Staff & Roles',

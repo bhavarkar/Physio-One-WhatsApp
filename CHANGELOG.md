@@ -10,6 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0-draft] - 2026-11-14
 
 ### Added
+- **Task 8: pgvector Memory, Clinic Knowledge Base & Semantic Retrieval (RAG)**:
+  - Authored Alembic migration `004_knowledge_base_pgvector_rag.py` establishing pgvector extension, adding document ingestion metadata (`source_hash`, `file_type`, `file_size_bytes`, `version`), chunk metadata, `ai_retrieval_logs` audit table, `AIAgent` RAG settings (`knowledge_base_id`, `rag_enabled`, `rag_similarity_threshold`, `rag_top_k`), and pgvector HNSW cosine index `ix_knowledge_chunks_embedding_hnsw` (total database tables: 38).
+  - Built provider-independent embedding abstraction: `BaseEmbeddingProvider`, `EmbeddingError`, `EmbeddingDimensionMismatchError`, and `OpenAIEmbeddingProvider` targeting `text-embedding-3-small` (1536 dimensions) with batching and error normalization.
+  - Implemented `DeterministicEmbeddingProvider` for offline development and testing with strict production guardrails (raises `EmbeddingError` if `ENVIRONMENT=production` to prevent mock vectors from serving production queries).
+  - Built `DocumentProcessor` (`backend/app/services/document_processor.py`) supporting PDF, DOCX, TXT, and Markdown with zero external binary dependencies, magic byte verification, 10MB limit, text extraction, normalization, and chunking with configurable size and overlap.
+  - Implemented `KnowledgeService` (`backend/app/services/knowledge_service.py`) for collection CRUD, document ingestion, duplicate prevention via SHA-256 hash, reprocessing, archival, deletion, and physical file cleanup.
+  - Implemented `RetrievalService` (`backend/app/services/retrieval_service.py`) for semantic cosine similarity search, threshold filtering, active document enforcement, latency tracking in `ai_retrieval_logs`, and boundary-guarded RAG prompt staging defending against prompt injection.
+  - Implemented `MemoryService` (`backend/app/services/memory_service.py`) managing short-term chronological WhatsApp conversation turns (max 10 messages, 4000 char budget) and persistent patient memories strictly isolated by `contact_id`.
+  - Implemented `SearchClinicKnowledgeTool` (`backend/app/tools/clinical/knowledge.py`) registered in `ToolRegistry` with caller permission gates (`knowledge:read`).
+  - Integrated RAG retrieval context and patient memory context into `AgentRuntime` (`backend/app/agents/runtime.py`).
+  - Built authenticated REST API routes (`backend/app/api/v1/knowledge.py`) mounted under `/api/v1/knowledge`: `/bases`, `/bases/{id}`, `/documents/upload`, `/documents/{id}/reprocess`, `/documents/{id}/archive`, `/documents/{id}`, `/search`, `/test-retrieval`, and `/contacts/{id}/memories`.
+  - Built frontend typed API client methods in `frontend/src/lib/api-client.ts`.
+  - Built complete interactive Knowledge Base dashboard (`frontend/src/app/(dashboard)/knowledge/page.tsx`) with collection switcher, document management table with status badges (`ready`, `processing`, `failed`, `archived`), upload modal with chunking options, and interactive RAG retrieval test console with latency and similarity indicators.
+  - Added Knowledge Base link to sidebar navigation (`frontend/src/app/(dashboard)/layout.tsx`) and added Knowledge Base assignment with RAG parameters to Agent modals (`frontend/src/app/(dashboard)/agents/page.tsx`).
+  - Created automated backend test suites: `test_document_processor.py` (4 tests), `test_embeddings.py` (7 tests), `test_knowledge_service.py` (2 tests), `test_retrieval_and_rag.py` (3 tests), `test_memory_service.py` (2 tests), `test_knowledge_api.py` (2 tests) — total backend regression suite: 88/88 passing (100%).
+  - Added frontend test suite `frontend/src/app/(dashboard)/knowledge/knowledge.test.tsx` (5 tests) — total frontend suite: 30/30 passing across 9 suites (100%).
+  - Clean TypeScript check with zero errors (`tsc --noEmit`).
+
 - **Task 7: Multi-Provider LLM Gateway & Agent Runtime**:
   - Implemented Alembic migration `003_ai_agent_sessions_and_usage.py` creating `ai_agent_sessions`, `ai_agent_executions`, `llm_usage_logs` and altering `ai_providers`, `ai_agents`, `ai_agent_versions`, and `ai_tool_executions` (total database tables: 37).
   - Built typed Pydantic schemas (`backend/app/llm/schemas.py`) for unified LLM interactions: `ChatMessage`, `MessageRole`, `ToolCall`, `ToolDefinition`, `LLMOptions`, `LLMUsage`, `LLMResponse`, `LLMStreamChunk`, and `ProviderCapabilities`.

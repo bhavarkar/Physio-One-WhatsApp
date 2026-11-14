@@ -297,5 +297,51 @@ The appointment subsystem coordinates slot generation, availability checks, stat
 5. **Token Accounting & Ledger**:
    - Every LLM invocation records input, output, and total token usage along with cost calculations in `llm_usage_logs`.
 
+---
+
+## Module G: pgvector Memory, Knowledge Base & Semantic Retrieval (Task 8)
+
+```
+   ┌────────────────────────────────────────────────────────┐
+   │            Document Ingestion Pipeline                 │
+   │  (PDF / DOCX / TXT / MD -> Magic Byte Check -> Chunk)  │
+   └───────────────────────────┬────────────────────────────┘
+                               │ Extracted Chunks
+                               ▼
+   ┌────────────────────────────────────────────────────────┐
+   │             Embedding Provider Service                 │
+   │  - text-embedding-3-small (1536 dim unit vectors)      │
+   │  - Strict Production Guardrail (No Mock Vectors)       │
+   └───────────────────────────┬────────────────────────────┘
+                               │ Normalized Embeddings
+                               ▼
+   ┌────────────────────────────────────────────────────────┐
+   │          PostgreSQL pgvector Vector Store              │
+   │  - knowledge_chunks table                              │
+   │  - HNSW Index (vector_cosine_ops, m=16, ef=64)        │
+   │  - Cosine Distance Operator (<=>)                      │
+   └───────────────────────────┬────────────────────────────┘
+                               │ Vector Similarity Search
+                               ▼
+   ┌────────────────────────────────────────────────────────┐
+   │          Semantic Retrieval & RAG Context Builder       │
+   │  - Cosine similarity threshold & top-k filtering       │
+   │  - Active & ready document status gate                 │
+   │  - Prompt-injection defense boundary wrappers          │
+   │  - SearchClinicKnowledgeTool in AgentRuntime           │
+   │  - Strict Contact-Scoped Patient Memory Isolation      │
+   └────────────────────────────────────────────────────────┘
+```
+
+### Key Architectural Invariants:
+1. **Strict Patient Memory Isolation**:
+   - `ConversationMemory` records durable facts strictly keyed by `contact_id`. Cross-patient memory leakage is impossible by design.
+2. **Untrusted Knowledge Document Handling**:
+   - Uploaded documents are treated as untrusted data. Retrieved chunks are isolated within `<clinic_reference_document>` tags in the prompt to prevent model prompt injection.
+3. **Deterministic Testing vs. Production Separation**:
+   - `DeterministicEmbeddingProvider` is tagged `is_test_provider=True`. If `ENVIRONMENT=production`, an explicit error is raised preventing mock vectors from corrupting production semantic search.
+4. **pgvector HNSW Performance**:
+   - Vector columns enforce `Vector(1536)`. Indexing utilizes HNSW with cosine distance for sub-50ms retrieval latencies.
+
 
 

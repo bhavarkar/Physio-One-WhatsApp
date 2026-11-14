@@ -137,6 +137,10 @@ export interface AIAgent {
   max_execution_steps: number;
   execution_timeout_seconds: number;
   context_budget_tokens: number;
+  knowledge_base_id?: string | null;
+  rag_enabled?: boolean;
+  rag_similarity_threshold?: number;
+  rag_top_k?: number;
   current_version: number;
   is_active: boolean;
   created_at: string;
@@ -213,6 +217,77 @@ export interface AgentExecutionSession {
   duration_ms?: number | null;
   created_at: string;
   executions: AgentExecutionStep[];
+}
+
+export interface KnowledgeBase {
+  id: string;
+  name: string;
+  description: string | null;
+  embedding_model: string;
+  vector_dimension: number;
+  is_active: boolean;
+  created_by_id: string | null;
+  document_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KnowledgeDocument {
+  id: string;
+  knowledge_base_id: string;
+  title: string;
+  filename: string;
+  file_type: string;
+  file_url: string;
+  file_size_bytes: number;
+  source_hash: string | null;
+  chunk_count: number;
+  version: number;
+  status: 'pending' | 'processing' | 'ready' | 'failed' | 'archived';
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KnowledgeChunk {
+  id: string;
+  document_id: string;
+  chunk_index: number;
+  chunk_text: string;
+  chunk_metadata: Record<string, any> | null;
+  created_at: string;
+}
+
+export interface KnowledgeSearchSnippet {
+  chunk_id: string;
+  document_id: string;
+  document_title: string;
+  document_version: number;
+  knowledge_base_id: string;
+  knowledge_base_name: string;
+  chunk_index: number;
+  chunk_text: string;
+  similarity_score: number;
+}
+
+export interface KnowledgeSearchResponse {
+  query: string;
+  count: number;
+  retrieval_latency_ms: number;
+  results: KnowledgeSearchSnippet[];
+}
+
+export interface ConversationMemory {
+  id: string;
+  contact_id: string;
+  conversation_id: string | null;
+  memory_type: string;
+  content: string;
+  confidence_score: number;
+  is_active: boolean;
+  source_message_id: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface AppointmentHistory {
@@ -660,6 +735,10 @@ export const api = {
     max_execution_steps?: number;
     execution_timeout_seconds?: number;
     context_budget_tokens?: number;
+    knowledge_base_id?: string | null;
+    rag_enabled?: boolean;
+    rag_similarity_threshold?: number;
+    rag_top_k?: number;
     is_active?: boolean;
   }) =>
     apiFetch<AIAgent>('/api/v1/agents', {
@@ -681,6 +760,10 @@ export const api = {
       max_execution_steps?: number;
       execution_timeout_seconds?: number;
       context_budget_tokens?: number;
+      knowledge_base_id?: string | null;
+      rag_enabled?: boolean;
+      rag_similarity_threshold?: number;
+      rag_top_k?: number;
       is_active?: boolean;
       change_summary?: string;
     }
@@ -706,6 +789,104 @@ export const api = {
     apiFetch<AgentExecutionSession>(`/api/v1/agents/executions/${executionId}`),
 
   getTools: () => apiFetch<RegisteredTool[]>('/api/v1/tools'),
+
+  // --- Knowledge Bases & RAG ---
+  getKnowledgeBases: (activeOnly = false) =>
+    apiFetch<KnowledgeBase[]>(`/api/v1/knowledge/bases?active_only=${activeOnly}`),
+
+  getKnowledgeBase: (kbId: string) =>
+    apiFetch<KnowledgeBase>(`/api/v1/knowledge/bases/${kbId}`),
+
+  createKnowledgeBase: (data: {
+    name: string;
+    description?: string;
+    embedding_model?: string;
+    vector_dimension?: number;
+  }) =>
+    apiFetch<KnowledgeBase>('/api/v1/knowledge/bases', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateKnowledgeBase: (
+    kbId: string,
+    data: { name?: string; description?: string; is_active?: boolean }
+  ) =>
+    apiFetch<KnowledgeBase>(`/api/v1/knowledge/bases/${kbId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  deleteKnowledgeBase: (kbId: string) =>
+    apiFetch<void>(`/api/v1/knowledge/bases/${kbId}`, {
+      method: 'DELETE',
+    }),
+
+  getKnowledgeDocuments: (kbId: string) =>
+    apiFetch<KnowledgeDocument[]>(`/api/v1/knowledge/bases/${kbId}/documents`),
+
+  getDocument: (docId: string) =>
+    apiFetch<KnowledgeDocument>(`/api/v1/knowledge/documents/${docId}`),
+
+  uploadKnowledgeDocument: (formData: FormData) =>
+    apiFetch<KnowledgeDocument>('/api/v1/knowledge/documents/upload', {
+      method: 'POST',
+      body: formData,
+    }),
+
+  reprocessDocument: (docId: string) =>
+    apiFetch<KnowledgeDocument>(`/api/v1/knowledge/documents/${docId}/reprocess`, {
+      method: 'POST',
+    }),
+
+  archiveDocument: (docId: string) =>
+    apiFetch<KnowledgeDocument>(`/api/v1/knowledge/documents/${docId}/archive`, {
+      method: 'POST',
+    }),
+
+  deleteKnowledgeDocument: (docId: string) =>
+    apiFetch<void>(`/api/v1/knowledge/documents/${docId}`, {
+      method: 'DELETE',
+    }),
+
+  searchKnowledge: (data: {
+    query: string;
+    knowledge_base_id?: string;
+    top_k?: number;
+    similarity_threshold?: number;
+  }) =>
+    apiFetch<KnowledgeSearchResponse>('/api/v1/knowledge/search', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  testKnowledgeRetrieval: (data: {
+    query: string;
+    knowledge_base_id?: string;
+    top_k?: number;
+    similarity_threshold?: number;
+  }) =>
+    apiFetch<KnowledgeSearchResponse>('/api/v1/knowledge/test-retrieval', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getContactMemories: (contactId: string) =>
+    apiFetch<ConversationMemory[]>(`/api/v1/knowledge/contacts/${contactId}/memories`),
+
+  createContactMemory: (
+    contactId: string,
+    data: { content: string; memory_type?: string; confidence_score?: number }
+  ) =>
+    apiFetch<ConversationMemory>(`/api/v1/knowledge/contacts/${contactId}/memories`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  deleteContactMemory: (memoryId: string, contactId: string) =>
+    apiFetch<void>(`/api/v1/knowledge/contacts/${contactId}/memories/${memoryId}`, {
+      method: 'DELETE',
+    }),
 };
 
 export const apiClient = api;

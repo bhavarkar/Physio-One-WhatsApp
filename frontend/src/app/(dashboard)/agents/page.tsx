@@ -28,6 +28,7 @@ import {
   AgentExecutionSession,
   AIModel,
   RegisteredTool,
+  KnowledgeBase,
 } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,7 @@ export default function AgentsPage() {
   const [agents, setAgents] = useState<AIAgent[]>([]);
   const [models, setModels] = useState<AIModel[]>([]);
   const [tools, setTools] = useState<RegisteredTool[]>([]);
+  const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -71,6 +73,10 @@ export default function AgentsPage() {
     max_execution_steps: 5,
     execution_timeout_seconds: 60,
     context_budget_tokens: 4000,
+    knowledge_base_id: '',
+    rag_enabled: true,
+    rag_similarity_threshold: 0.70,
+    rag_top_k: 3,
     is_active: true,
     change_summary: '',
   });
@@ -86,14 +92,16 @@ export default function AgentsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [agentList, modelList, toolList] = await Promise.all([
+      const [agentList, modelList, toolList, kbList] = await Promise.all([
         apiClient.getAgents(),
         apiClient.getLLMModels().catch(() => []),
         apiClient.getTools().catch(() => []),
+        apiClient.getKnowledgeBases(true).catch(() => []),
       ]);
       setAgents(agentList);
       setModels(modelList);
       setTools(toolList);
+      setKnowledgeBases(kbList);
     } catch (err: any) {
       setError(err.message || 'Failed to load AI Agents.');
     } finally {
@@ -122,6 +130,10 @@ export default function AgentsPage() {
       max_execution_steps: 5,
       execution_timeout_seconds: 60,
       context_budget_tokens: 4000,
+      knowledge_base_id: knowledgeBases[0]?.id || '',
+      rag_enabled: true,
+      rag_similarity_threshold: 0.70,
+      rag_top_k: 3,
       is_active: true,
       change_summary: '',
     });
@@ -142,6 +154,10 @@ export default function AgentsPage() {
       max_execution_steps: agent.max_execution_steps,
       execution_timeout_seconds: agent.execution_timeout_seconds,
       context_budget_tokens: agent.context_budget_tokens,
+      knowledge_base_id: agent.knowledge_base_id || '',
+      rag_enabled: agent.rag_enabled ?? true,
+      rag_similarity_threshold: agent.rag_similarity_threshold ?? 0.70,
+      rag_top_k: agent.rag_top_k ?? 3,
       is_active: agent.is_active,
       change_summary: '',
     });
@@ -199,6 +215,10 @@ export default function AgentsPage() {
         max_execution_steps: Number(agentForm.max_execution_steps),
         execution_timeout_seconds: Number(agentForm.execution_timeout_seconds),
         context_budget_tokens: Number(agentForm.context_budget_tokens),
+        knowledge_base_id: agentForm.knowledge_base_id || undefined,
+        rag_enabled: agentForm.rag_enabled,
+        rag_similarity_threshold: Number(agentForm.rag_similarity_threshold),
+        rag_top_k: Number(agentForm.rag_top_k),
         is_active: agentForm.is_active,
       });
       setSuccessMsg(`Agent '${agentForm.name}' created successfully.`);
@@ -229,6 +249,10 @@ export default function AgentsPage() {
         max_execution_steps: Number(agentForm.max_execution_steps),
         execution_timeout_seconds: Number(agentForm.execution_timeout_seconds),
         context_budget_tokens: Number(agentForm.context_budget_tokens),
+        knowledge_base_id: agentForm.knowledge_base_id || undefined,
+        rag_enabled: agentForm.rag_enabled,
+        rag_similarity_threshold: Number(agentForm.rag_similarity_threshold),
+        rag_top_k: Number(agentForm.rag_top_k),
         is_active: agentForm.is_active,
         change_summary: agentForm.change_summary || undefined,
       });
@@ -368,6 +392,16 @@ export default function AgentsPage() {
                     <span className="text-slate-500">Allowed Tools:</span>
                     <span className="font-medium text-emerald-700">{agent.allowed_tools.length} active</span>
                   </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Knowledge RAG:</span>
+                    <span className="font-medium text-slate-800">
+                      {agent.rag_enabled ? (
+                        <span className="text-emerald-700 font-semibold">Enabled (top-{agent.rag_top_k || 3})</span>
+                      ) : (
+                        <span className="text-slate-400">Disabled</span>
+                      )}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Actions */}
@@ -501,6 +535,66 @@ export default function AgentsPage() {
               </div>
             </div>
 
+            {/* Knowledge Base & RAG Configuration */}
+            <div className="border border-emerald-200 bg-emerald-50/40 p-3 rounded-lg space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-emerald-900 flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={agentForm.rag_enabled}
+                    onChange={(e) => setAgentForm({ ...agentForm, rag_enabled: e.target.checked })}
+                    className="rounded text-emerald-600 focus:ring-emerald-500"
+                  />
+                  Enable Clinic Knowledge Retrieval (RAG)
+                </label>
+                <span className="text-[10px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded font-mono">
+                  pgvector HNSW
+                </span>
+              </div>
+              {agentForm.rag_enabled && (
+                <div className="grid grid-cols-3 gap-2 pt-1 text-xs">
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Knowledge Base</label>
+                    <select
+                      className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-xs"
+                      value={agentForm.knowledge_base_id}
+                      onChange={(e) => setAgentForm({ ...agentForm, knowledge_base_id: e.target.value })}
+                    >
+                      <option value="">Default Collection</option>
+                      {knowledgeBases.map((kb) => (
+                        <option key={kb.id} value={kb.id}>
+                          {kb.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Min Similarity</label>
+                    <Input
+                      type="number"
+                      step={0.05}
+                      min={0.0}
+                      max={1.0}
+                      className="h-8 text-xs bg-white"
+                      value={agentForm.rag_similarity_threshold}
+                      onChange={(e) => setAgentForm({ ...agentForm, rag_similarity_threshold: parseFloat(e.target.value) || 0.70 })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Top-K Chunks</label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={10}
+                      className="h-8 text-xs bg-white"
+                      value={agentForm.rag_top_k}
+                      onChange={(e) => setAgentForm({ ...agentForm, rag_top_k: parseInt(e.target.value) || 3 })}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">System Instructions *</label>
               <textarea
@@ -623,6 +717,66 @@ export default function AgentsPage() {
                   </label>
                 ))}
               </div>
+            </div>
+
+            {/* Knowledge Base & RAG Configuration */}
+            <div className="border border-emerald-200 bg-emerald-50/40 p-3 rounded-lg space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-emerald-900 flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={agentForm.rag_enabled}
+                    onChange={(e) => setAgentForm({ ...agentForm, rag_enabled: e.target.checked })}
+                    className="rounded text-emerald-600 focus:ring-emerald-500"
+                  />
+                  Enable Clinic Knowledge Retrieval (RAG)
+                </label>
+                <span className="text-[10px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded font-mono">
+                  pgvector HNSW
+                </span>
+              </div>
+              {agentForm.rag_enabled && (
+                <div className="grid grid-cols-3 gap-2 pt-1 text-xs">
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Knowledge Base</label>
+                    <select
+                      className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-xs"
+                      value={agentForm.knowledge_base_id}
+                      onChange={(e) => setAgentForm({ ...agentForm, knowledge_base_id: e.target.value })}
+                    >
+                      <option value="">Default Collection</option>
+                      {knowledgeBases.map((kb) => (
+                        <option key={kb.id} value={kb.id}>
+                          {kb.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Min Similarity</label>
+                    <Input
+                      type="number"
+                      step={0.05}
+                      min={0.0}
+                      max={1.0}
+                      className="h-8 text-xs bg-white"
+                      value={agentForm.rag_similarity_threshold}
+                      onChange={(e) => setAgentForm({ ...agentForm, rag_similarity_threshold: parseFloat(e.target.value) || 0.70 })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Top-K Chunks</label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={10}
+                      className="h-8 text-xs bg-white"
+                      value={agentForm.rag_top_k}
+                      onChange={(e) => setAgentForm({ ...agentForm, rag_top_k: parseInt(e.target.value) || 3 })}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>

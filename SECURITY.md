@@ -63,6 +63,26 @@ The platform handles patient communications, appointment schedules, and contact 
   - Deterministic context truncation prevents prompt token overflow, always preserving the core system prompt and latest user inquiry.
   - Execution runtime enforces strict step limits (`max_execution_steps`) and timeouts (`execution_timeout_seconds`) to eliminate infinite tool execution loops.
 
+### G. pgvector Memory, Knowledge Base & RAG Security (Task 8)
+- **Patient Memory Isolation**:
+  - Persistent conversation memories (`ConversationMemory`) are strictly isolated by `contact_id`.
+  - Cross-patient memory leakage is architecturally prohibited; queries for patient memory require an explicit `contact_id` filter and cannot be accessed via general clinic FAQ retrieval.
+  - Deletion of memory records is scoped strictly to the authorized contact.
+- **Prompt Injection Defense**:
+  - Retrieved knowledge chunks are treated as untrusted external data and wrapped in boundary tags (`<clinic_reference_document>` / `</clinic_reference_document>`) with explicit system instructions prohibiting documents from overriding core clinic rules or permissions.
+- **Document Ingestion Security & Validation**:
+  - Strict magic byte validation for PDF (`%PDF-`), DOCX (`PK\x03\x04` + `word/document.xml`), and plain text/markdown (binary null-byte check).
+  - Maximum upload size enforced at 10 MB.
+  - Zero external binary execution (uses pure Python ZIP/XML and stream parsing) preventing shell execution or native memory exploits.
+- **Production Embedding Provider Guardrail**:
+  - `DeterministicEmbeddingProvider` is explicitly tagged as a test-only provider (`is_test_provider=True`).
+  - An explicit guardrail raises `EmbeddingError` if `ENVIRONMENT=production`, preventing mock/test embeddings from silently operating in production environments.
+  - Vector dimensions (1536) are validated on every embedding generation to prevent index corruption.
+- **Least-Privilege RBAC & CSRF Protection**:
+  - Knowledge Base creation, document upload, reprocessing, archiving, and deletion require `Owner` or `Admin` privileges.
+  - Semantic search and retrieval testing are restricted to `Operator`, `Admin`, and `Owner` roles.
+  - All state-mutating document and knowledge base operations require valid CSRF double-submit token verification.
+
 ---
 
 ## 3. Vulnerability Reporting & Patch Policy

@@ -11,6 +11,7 @@ from sqlalchemy import select
 from app.tools.base import BaseTool
 from app.tools.clinical.availability import CheckAvailabilityTool
 from app.tools.clinical.patient import FindPatientTool
+from app.tools.clinical.knowledge import SearchClinicKnowledgeTool
 from app.llm.schemas import ToolDefinition
 from app.models.ai import AIToolDefinition
 
@@ -76,3 +77,4 @@ class ToolRegistry:
 # Initialize default clinical tools into registry
 ToolRegistry.register(CheckAvailabilityTool())
 ToolRegistry.register(FindPatientTool())
+ToolRegistry.register(SearchClinicKnowledgeTool())

@@ -179,3 +179,25 @@
 | `POST` | `/api/v1/updates/backup` | Trigger manual pre-update database snapshot | `Super Admin` |
 | `POST` | `/api/v1/updates/apply` | Execute automated upgrade pipeline | `Super Admin` |
 
+---
+
+### L. Knowledge Base & Semantic Retrieval (RAG)
+| Method | Endpoint | Description | Role Required |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/knowledge/bases` | List all knowledge base collections with document counts | `Viewer`+ |
+| `POST` | `/api/v1/knowledge/bases` | Create new knowledge base collection | `Admin`+ |
+| `GET` | `/api/v1/knowledge/bases/{id}` | Retrieve knowledge base details | `Viewer`+ |
+| `PATCH` | `/api/v1/knowledge/bases/{id}` | Update knowledge base details | `Admin`+ |
+| `DELETE` | `/api/v1/knowledge/bases/{id}` | Delete knowledge base and documents | `Admin`+ |
+| `GET` | `/api/v1/knowledge/bases/{id}/documents` | List documents in knowledge base | `Viewer`+ |
+| `POST` | `/api/v1/knowledge/documents/upload` | Upload and ingest document (PDF, DOCX, TXT, MD) | `Admin`+ |
+| `GET` | `/api/v1/knowledge/documents/{id}` | Retrieve document details and chunk counts | `Viewer`+ |
+| `POST` | `/api/v1/knowledge/documents/{id}/reprocess` | Re-extract, normalize, chunk, and embed document | `Admin`+ |
+| `POST` | `/api/v1/knowledge/documents/{id}/archive` | Archive document (exclude chunks from semantic search) | `Admin`+ |
+| `DELETE` | `/api/v1/knowledge/documents/{id}` | Delete document, vector chunks, and physical file | `Admin`+ |
+| `POST` | `/api/v1/knowledge/search` | Search knowledge chunks with cosine similarity | `Operator`+ |
+| `POST` | `/api/v1/knowledge/test-retrieval` | Test retrieval console with latency tracking | `Operator`+ |
+| `GET` | `/api/v1/knowledge/contacts/{id}/memories` | List persistent memories for a contact | `Operator`+ |
+| `POST` | `/api/v1/knowledge/contacts/{id}/memories` | Store durable contact memory | `Operator`+ |
+| `DELETE` | `/api/v1/knowledge/contacts/{id}/memories/{mem_id}` | Delete contact memory | `Admin`+ |
+

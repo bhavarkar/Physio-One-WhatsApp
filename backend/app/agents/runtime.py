@@ -33,6 +33,8 @@ from app.llm.errors import LLMError
 from app.tools.base import ToolExecutionContext
 from app.tools.registry import ToolRegistry
 from app.tools.dispatcher import ToolDispatcher
+from app.services.retrieval_service import RetrievalService
+from app.services.memory_service import MemoryService
 
 logger = logging.getLogger("physio_one.agent.runtime")
 
@@ -46,6 +48,7 @@ class AgentRunResult(BaseModel):
     response_text: Optional[str] = None
     steps: List[Dict[str, Any]] = Field(default_factory=list)
     tool_calls: List[Dict[str, Any]] = Field(default_factory=list)
+    rag_sources: List[Dict[str, Any]] = Field(default_factory=list)
     total_input_tokens: int = 0
     total_output_tokens: int = 0
     total_tokens: int = 0
@@ -161,6 +164,47 @@ class AgentRuntime:
                     break
 
         conversation_staging: List[ChatMessage] = [system_msg] + truncated_history + [current_user_msg]
+
+        # Staging RAG Context & Patient Memory
+        retrieved_rag_sources: List[Dict[str, Any]] = []
+
+        # 1. Clinic Knowledge Retrieval (if agent has knowledge_base_id and rag_enabled or requested via metadata)
+        is_rag_active = agent.rag_enabled or (session_metadata and session_metadata.get("rag_enabled"))
+        kb_target_id = agent.knowledge_base_id
+        if session_metadata and session_metadata.get("knowledge_base_id"):
+            try:
+                kb_target_id = uuid.UUID(str(session_metadata["knowledge_base_id"]))
+            except ValueError:
+                pass
+
+        if is_rag_active and kb_target_id:
+            try:
+                rag_res = await RetrievalService.build_rag_context(
+                    db=db,
+                    query=user_message,
+                    knowledge_base_id=kb_target_id,
+                    top_k=int(agent.rag_top_k or 3),
+                    similarity_threshold=float(agent.rag_similarity_threshold or 0.65),
+                    session_id=session.id,
+                )
+                if rag_res.get("has_context"):
+                    rag_msg = ChatMessage(role=MessageRole.SYSTEM, content=rag_res["context_text"])
+                    conversation_staging.insert(1, rag_msg)
+                    retrieved_rag_sources = rag_res.get("sources", [])
+            except Exception as e:
+                logger.warning(f"RAG context retrieval failed: {e}")
+
+        # 2. Patient Memory Staging (isolated by contact_id)
+        contact_id_val = session_metadata.get("contact_id") if session_metadata else None
+        if contact_id_val:
+            try:
+                c_uuid = uuid.UUID(str(contact_id_val))
+                mem_ctx = await MemoryService.build_patient_memory_context(db, c_uuid)
+                if mem_ctx:
+                    mem_msg = ChatMessage(role=MessageRole.SYSTEM, content=mem_ctx)
+                    conversation_staging.insert(1, mem_msg)
+            except Exception as e:
+                logger.warning(f"Patient memory staging failed: {e}")
 
         # Allowed Tools definition
         allowed_tools_list = agent.allowed_tools or []
@@ -315,6 +359,7 @@ class AgentRuntime:
                 response_text=final_response_text or "",
                 steps=steps_summary,
                 tool_calls=all_tool_calls,
+                rag_sources=retrieved_rag_sources,
                 total_input_tokens=total_in_tokens,
                 total_output_tokens=total_out_tokens,
                 total_tokens=total_in_tokens + total_out_tokens,
@@ -343,6 +388,7 @@ class AgentRuntime:
                 response_text=final_response_text,
                 steps=steps_summary,
                 tool_calls=all_tool_calls,
+                rag_sources=retrieved_rag_sources,
                 total_input_tokens=total_in_tokens,
                 total_output_tokens=total_out_tokens,
                 total_tokens=total_in_tokens + total_out_tokens,
@@ -372,6 +418,7 @@ class AgentRuntime:
                 response_text=final_response_text,
                 steps=steps_summary,
                 tool_calls=all_tool_calls,
+                rag_sources=retrieved_rag_sources,
                 total_input_tokens=total_in_tokens,
                 total_output_tokens=total_out_tokens,
                 total_tokens=total_in_tokens + total_out_tokens,

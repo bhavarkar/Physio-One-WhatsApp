@@ -133,6 +133,14 @@ alembic current
   - Alters `ai_agent_versions` adding `max_tokens` and `allowed_tools`.
   - Alters `ai_tool_executions` adding `session_id` foreign key.
   - Total database tables expanded to 37.
+- `backend/alembic/versions/004_knowledge_base_pgvector_rag.py`:
+  - Ensures `vector` extension is active.
+  - Adds document tracking metadata: `source_hash`, `file_type`, `file_size_bytes`, and document `version` to `knowledge_documents`.
+  - Adds `chunk_metadata` (JSONB) to `knowledge_chunks`.
+  - Creates pgvector HNSW cosine distance index `ix_knowledge_chunks_embedding_hnsw` on `knowledge_chunks.embedding` using `vector_cosine_ops`.
+  - Creates `ai_retrieval_logs` table tracking semantic query, similarity threshold, top-k chunks, matched chunk IDs, latency ms, and session ID.
+  - Alters `ai_agents` adding RAG settings: `knowledge_base_id`, `rag_enabled`, `rag_similarity_threshold`, and `rag_top_k`.
+  - Total database tables expanded to 38.
 
 ---
 

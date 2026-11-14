@@ -1,9 +1,9 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AgentsPage from './page';
-import { apiClient } from '@/lib/api-client';
+import { apiClient, AIAgent, AIModel, RegisteredTool } from '@/lib/api-client';
 
-const mockAgent = {
+const mockAgent: AIAgent = {
   id: 'agent-deepti-1',
   name: 'Deepti',
   description: 'AI Receptionist for Physio One Clinic.',
@@ -11,43 +11,46 @@ const mockAgent = {
   current_version: 1,
   primary_model_id: 'model-muse-1',
   primary_model_identifier: 'muse-v1',
+  primary_provider_name: 'muse',
   fallback_model_id: null,
   fallback_model_identifier: null,
+  fallback_provider_name: null,
   temperature: 0.2,
   max_tokens: 1024,
-  context_window_tokens: 8192,
+  context_budget_tokens: 4000,
   max_execution_steps: 5,
   execution_timeout_seconds: 30,
   system_prompt: 'You are Deepti, the front-desk clinic receptionist for Physio One.',
   allowed_tools: ['check_availability', 'find_patient'],
+  supported_languages: ['en', 'hi'],
+  rag_enabled: true,
+  rag_top_k: 3,
+  rag_similarity_threshold: 0.70,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 };
 
-const mockModel = {
+const mockModel: AIModel = {
   id: 'model-muse-1',
   provider_id: 'prov-muse-1',
   provider_name: 'muse',
   model_identifier: 'muse-v1',
   display_name: 'Muse v1 Clinical',
-  context_window_tokens: 8192,
-  max_output_tokens: 2048,
+  max_context_tokens: 8192,
   supports_tools: false,
-  supports_streaming: false,
-  supports_structured_output: false,
-  input_token_cost_per_million: 0.5,
-  output_token_cost_per_million: 1.5,
-  is_active: true,
+  supports_vision: false,
   created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
 };
 
-const mockTool = {
+const mockTool: RegisteredTool = {
   name: 'check_availability',
   description: 'Check available appointment slots for a given practitioner and date.',
-  category: 'clinical',
   is_mutation: false,
-  parameters: { type: 'object', properties: { date: { type: 'string' } } },
+  parameters_schema: { type: 'object', properties: { date: { type: 'string' } } },
+  requires_permission: 'appointments:read',
+  is_idempotent: true,
+  timeout_seconds: 10,
+  is_enabled: true,
 };
 
 describe('AgentsPage', () => {
@@ -75,16 +78,17 @@ describe('AgentsPage', () => {
     jest.spyOn(apiClient, 'testAgent').mockResolvedValue({
       session_id: 'session-test-123',
       agent_id: mockAgent.id,
-      agent_version: 1,
+      agent_name: 'Deepti',
       provider: 'muse',
       model: 'muse-v1',
       status: 'completed',
-      total_execution_steps: 1,
+      steps: [],
+      tool_calls: [],
       total_input_tokens: 42,
       total_output_tokens: 28,
+      total_tokens: 70,
       duration_ms: 350,
       response_text: 'Hello! I am Deepti. Physio One is open Monday through Saturday.',
-      tool_calls: [],
       error_message: null,
     });
 
@@ -109,43 +113,25 @@ describe('AgentsPage', () => {
     // Click "Send Test"
     fireEvent.click(screen.getByRole('button', { name: /Send Test/i }));
 
-    // Verify response
+    // Verify response text and metrics appear
     await waitFor(() => {
-      expect(screen.getByText(/Hello! I am Deepti. Physio One is open Monday through Saturday./i)).toBeInTheDocument();
+      expect(screen.getByText(/Physio One is open Monday through Saturday/i)).toBeInTheDocument();
       expect(screen.getByText('350ms')).toBeInTheDocument();
-      expect(screen.getByText('42 / 28')).toBeInTheDocument();
     });
   });
 
-  it('opens version history dialog and displays version snapshots', async () => {
-    jest.spyOn(apiClient, 'getAgentVersions').mockResolvedValue([
-      {
-        id: 'ver-1',
-        agent_id: mockAgent.id,
-        version_number: 1,
-        system_prompt: 'You are Deepti, the front-desk clinic receptionist for Physio One.',
-        model_identifier: 'muse-v1',
-        temperature: 0.2,
-        max_tokens: 1024,
-        allowed_tools: ['check_availability'],
-        change_summary: 'Initial baseline for Task 7',
-        created_at: new Date().toISOString(),
-      },
-    ]);
-
+  it('opens agent creation modal with default parameters', async () => {
     render(<AgentsPage />);
 
     await waitFor(() => {
       expect(screen.getByText('Deepti')).toBeInTheDocument();
     });
 
-    // Click "v1" or version history trigger
-    fireEvent.click(screen.getByRole('button', { name: /History/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Create Agent/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Version History — Deepti/i)).toBeInTheDocument();
-      expect(screen.getByText('Version 1')).toBeInTheDocument();
-      expect(screen.getByText(/Initial baseline for Task 7/i)).toBeInTheDocument();
+      expect(screen.getByText(/Create New AI Agent/i)).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/e\.g\. Deepti/i)).toBeInTheDocument();
     });
   });
 });

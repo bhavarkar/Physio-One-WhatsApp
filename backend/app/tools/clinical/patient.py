@@ -79,12 +79,22 @@ class FindPatientTool(BaseTool):
             if len(raw_phone) >= 10:
                 masked_phone = f"{raw_phone[:3]}***{raw_phone[-4:]}"
 
+            raw_email = p.email or ""
+            masked_email = raw_email
+            if raw_email and "@" in raw_email:
+                parts = raw_email.split("@", 1)
+                user_part = parts[0]
+                if len(user_part) > 2:
+                    masked_email = f"{user_part[0]}***{user_part[-1]}@{parts[1]}"
+                else:
+                    masked_email = f"***@{parts[1]}"
+
             results.append({
                 "patient_id": str(p.id),
                 "full_name": p.full_name,
                 "masked_phone": masked_phone,
                 "gender": p.gender,
-                "email": p.email,
+                "masked_email": masked_email,
             })
 
         return {

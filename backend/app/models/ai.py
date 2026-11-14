@@ -90,9 +90,16 @@ class AIAgent(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     context_budget_tokens: Mapped[int] = mapped_column(Integer, default=4000, nullable=False)
     current_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    knowledge_base_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("knowledge_bases.id", ondelete="SET NULL"), nullable=True
+    )
+    rag_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    rag_similarity_threshold: Mapped[float] = mapped_column(Numeric(3, 2), default=0.70, nullable=False)
+    rag_top_k: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
 
     primary_model: Mapped["AIModel"] = relationship("AIModel", foreign_keys=[primary_model_id])
     fallback_model: Mapped[Optional["AIModel"]] = relationship("AIModel", foreign_keys=[fallback_model_id])
+    knowledge_base: Mapped[Optional["KnowledgeBase"]] = relationship("KnowledgeBase", foreign_keys=[knowledge_base_id])
     versions: Mapped[List["AIAgentVersion"]] = relationship(
         "AIAgentVersion", back_populates="agent", cascade="all, delete-orphan"
     )
@@ -274,3 +281,4 @@ class AIToolExecution(Base, UUIDPrimaryKeyMixin):
 # Resolve forward references
 from app.models.user import User  # noqa: E402, F401
 from app.models.whatsapp import Conversation  # noqa: E402, F401
+from app.models.memory import KnowledgeBase  # noqa: E402, F401

@@ -1,6 +1,7 @@
 """Conversation Memory, Summaries, and Knowledge Base Models
 
 Utilizes pgvector for semantic retrieval and long-term memory.
+Single Organization Edition: Physio One Clinic.
 """
 import uuid
 from datetime import datetime
@@ -44,34 +45,53 @@ class ConversationSummary(Base, UUIDPrimaryKeyMixin):
 
 
 class ConversationMemory(Base, UUIDPrimaryKeyMixin):
-    """Semantic long-term memory for contact preferences and clinical notes."""
+    """Semantic long-term memory for contact preferences and clinical notes.
+    
+    Strictly isolated per contact_id to prevent cross-patient data leakage.
+    """
     __tablename__ = "conversation_memory"
 
     contact_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("whatsapp_contacts.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    conversation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     memory_type: Mapped[str] = mapped_column(
         String(50), nullable=False
-    )  # preference, clinical_note, appointment_preference
+    )  # preference, clinical_note, appointment_preference, general_fact
     content: Mapped[str] = mapped_column(Text, nullable=False)
     embedding = mapped_column(Vector(1536), nullable=True)
     confidence_score: Mapped[float] = mapped_column(Numeric(3, 2), default=1.00, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    source_message_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("whatsapp_messages.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
 
 class KnowledgeBase(Base, UUIDPrimaryKeyMixin, TimestampMixin):
-    """Knowledge collection container."""
+    """Knowledge collection container for approved clinic information."""
     __tablename__ = "knowledge_bases"
 
     name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    embedding_model: Mapped[str] = mapped_column(String(100), default="text-embedding-3-small", nullable=False)
+    vector_dimension: Mapped[int] = mapped_column(Integer, default=1536, nullable=False)
+    created_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     documents: Mapped[List["KnowledgeDocument"]] = relationship(
         "KnowledgeDocument", back_populates="knowledge_base", cascade="all, delete-orphan"
     )
+    created_by: Mapped[Optional["User"]] = relationship("User", foreign_keys=[created_by_id])
 
 
 class KnowledgeDocument(Base, UUIDPrimaryKeyMixin):
@@ -84,9 +104,19 @@ class KnowledgeDocument(Base, UUIDPrimaryKeyMixin):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     file_type: Mapped[str] = mapped_column(String(20), nullable=False)  # pdf, docx, txt, markdown
     file_url: Mapped[str] = mapped_column(Text, nullable=False)
+    file_size_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    source_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     chunk_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(20), default="pending", nullable=False
+    )  # pending, processing, ready, failed, archived
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
     knowledge_base: Mapped["KnowledgeBase"] = relationship("KnowledgeBase", back_populates="documents")
@@ -107,6 +137,7 @@ class KnowledgeChunk(Base, UUIDPrimaryKeyMixin):
     )
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     chunk_text: Mapped[str] = mapped_column(Text, nullable=False)
+    chunk_metadata: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     embedding = mapped_column(Vector(1536), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -115,5 +146,26 @@ class KnowledgeChunk(Base, UUIDPrimaryKeyMixin):
     document: Mapped["KnowledgeDocument"] = relationship("KnowledgeDocument", back_populates="chunks")
 
 
+class AIRetrievalLog(Base, UUIDPrimaryKeyMixin):
+    """Audit and latency log for semantic RAG retrieval invocations."""
+    __tablename__ = "ai_retrieval_logs"
+
+    session_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("ai_agent_sessions.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    query_text: Mapped[str] = mapped_column(Text, nullable=False)
+    knowledge_base_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("knowledge_bases.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    chunks_retrieved: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    similarity_scores: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 # Resolve forward references
 from app.models.whatsapp import Conversation, WhatsAppContact, WhatsAppMessage  # noqa: E402, F401
+from app.models.user import User  # noqa: E402, F401
+from app.models.ai import AIAgentSession  # noqa: E402, F401
