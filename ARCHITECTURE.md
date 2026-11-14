@@ -333,15 +333,65 @@ The appointment subsystem coordinates slot generation, availability checks, stat
    └────────────────────────────────────────────────────────┘
 ```
 
+---
+
+## Module H: Inbound WhatsApp AI Receptionist (Deepti) Orchestration (Task 9)
+
+```
+   ┌────────────────────────────────────────────────────────┐
+   │            WhatsApp Provider Webhook Ingress           │
+   │      (Meta Graph API v20 / YCloud Webhook Receiver)     │
+   └───────────────────────────┬────────────────────────────┘
+                               │ HMAC-SHA256 Signature Verified
+                               ▼
+   ┌────────────────────────────────────────────────────────┐
+   │       Event Deduplication & Message Persistence        │
+   │  - WebhookEvent (uq_provider_event_id idempotency)     │
+   │  - WhatsAppMessage (uq_provider_message_id)            │
+   └───────────────────────────┬────────────────────────────┘
+                               │ Enqueue Inbound Turn
+                               ▼
+   ┌────────────────────────────────────────────────────────┐
+   │    Durable PostgreSQL Inbound Queue & Burst Debouncer  │
+   │  - InboundProcessingJob (pending -> debouncing)        │
+   │  - Aggregates multi-message bursts (debounce: 5s)      │
+   │  - Worker Row-Level Locking (locked_by, locked_until)  │
+   └───────────────────────────┬────────────────────────────┘
+                               │ Debounce Window Matured
+                               ▼
+   ┌────────────────────────────────────────────────────────┐
+   │      Inbound Conversation Orchestrator & Safety Gates   │
+   │  1. Check AI Mode: disabled (Default) -> Skip          │
+   │  2. Opt-Out Check: STOP/UNSUBSCRIBE -> opted_out_all   │
+   │  3. Emergency Check: Emergency keywords -> Takeover     │
+   │  4. Takeover/Pause Check: is_human_takeover/ai_paused   │
+   │  5. Retrieve Context: Short-term turns + RAG + Memory  │
+   │  6. Execute Deepti AgentRuntime (read-only tools)      │
+   └───────────────────────────┬────────────────────────────┘
+                               │ Response Generated
+                               ▼
+   ┌────────────────────────────────────────────────────────┐
+   │         Response Draft & Outbound Dispatch Gate        │
+   │  - Persist AIResponseDraft in database                 │
+   │  - If Shadow Mode: Persist Draft for Inbox Review ONLY │
+   │  - If Live Mode:                                       │
+   │    * Pre-dispatch safety re-check                      │
+   │    * OutboundIdempotencyKey once-and-only-once check   │
+   │    * Send via Meta/YCloud Provider Adapter             │
+   └────────────────────────────────────────────────────────┘
+```
+
 ### Key Architectural Invariants:
-1. **Strict Patient Memory Isolation**:
-   - `ConversationMemory` records durable facts strictly keyed by `contact_id`. Cross-patient memory leakage is impossible by design.
-2. **Untrusted Knowledge Document Handling**:
-   - Uploaded documents are treated as untrusted data. Retrieved chunks are isolated within `<clinic_reference_document>` tags in the prompt to prevent model prompt injection.
-3. **Deterministic Testing vs. Production Separation**:
-   - `DeterministicEmbeddingProvider` is tagged `is_test_provider=True`. If `ENVIRONMENT=production`, an explicit error is raised preventing mock vectors from corrupting production semantic search.
-4. **pgvector HNSW Performance**:
-   - Vector columns enforce `Vector(1536)`. Indexing utilizes HNSW with cosine distance for sub-50ms retrieval latencies.
+1. **Disabled by Default**:
+   - `ai_mode` defaults to `disabled`. The system will not generate drafts or autonomous replies without explicit administrative activation.
+2. **Debounce Queueing**:
+   - Burst messages within the 5-second window are aggregated into a single turn to avoid jarring, multi-message fragmented AI responses.
+3. **Safety & Takeover Isolation**:
+   - Opt-out immediately suppresses all messaging. Emergency triggers immediate staff takeover and emergency guidance.
+   - Any manual staff interaction cancels active debounce jobs to eliminate race conditions between AI and human staff.
+4. **Outbound Idempotency**:
+   - Outbound dispatching is gated by `OutboundIdempotencyKey` ensuring zero duplicate patient replies.
+
 
 
 

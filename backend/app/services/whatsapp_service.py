@@ -462,6 +462,17 @@ async def process_incoming_webhook(
                     raw_payload=in_msg.raw_payload,
                 )
                 db.add(new_msg)
+                await db.flush()
+                try:
+                    from app.services.inbound_queue import InboundQueueService
+                    await InboundQueueService.enqueue_inbound_message(
+                        db=db,
+                        message=new_msg,
+                        conversation=conversation,
+                        contact=contact,
+                    )
+                except Exception as q_err:
+                    logger.warning("Failed to enqueue inbound message %s: %s", in_msg.message_id, str(q_err))
         except Exception as e:
             logger.error("Error processing inbound message %s: %s", in_msg.message_id, str(e))
 

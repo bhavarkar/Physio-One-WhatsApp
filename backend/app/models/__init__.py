@@ -45,7 +45,16 @@ from app.models.memory import (
     AIRetrievalLog,
 )
 
-# 6. Campaigns
+# 6. Inbound AI Orchestration, Queue & Handoff
+from app.models.inbound import (
+    InboundProcessingJob,
+    AIInboundSettings,
+    ConversationHandoff,
+    AIResponseDraft,
+    OutboundIdempotencyKey,
+)
+
+# 7. Campaigns
 from app.models.campaign import (
     CampaignTemplate,
     Campaign,
@@ -98,6 +107,11 @@ __all__ = [
     "KnowledgeDocument",
     "KnowledgeChunk",
     "AIRetrievalLog",
+    "InboundProcessingJob",
+    "AIInboundSettings",
+    "ConversationHandoff",
+    "AIResponseDraft",
+    "OutboundIdempotencyKey",
     "CampaignTemplate",
     "Campaign",
     "CampaignDelivery",

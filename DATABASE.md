@@ -141,6 +141,13 @@ alembic current
   - Creates `ai_retrieval_logs` table tracking semantic query, similarity threshold, top-k chunks, matched chunk IDs, latency ms, and session ID.
   - Alters `ai_agents` adding RAG settings: `knowledge_base_id`, `rag_enabled`, `rag_similarity_threshold`, and `rag_top_k`.
   - Total database tables expanded to 38.
+- `backend/alembic/versions/005_inbound_ai_orchestration.py`:
+  - Creates `inbound_processing_jobs`: durable queue tracking incoming WhatsApp messages, burst message aggregation, debounce windows, and worker locks.
+  - Creates `ai_inbound_settings`: global and per-account AI orchestration configuration (`ai_mode` defaulting to `disabled`, `debounce_seconds`, `opt_out_keywords`, `emergency_keywords`).
+  - Creates `conversation_handoffs`: immutable audit trail of human staff takeovers, AI pause/resume events, emergency detections, and patient opt-outs.
+  - Creates `ai_response_drafts`: AI generated responses persisted during shadow mode or pre-dispatch for staff inbox inspection.
+  - Creates `outbound_idempotency_keys`: strict once-and-only-once delivery tracking preventing duplicate outbound WhatsApp messages.
+  - Total database tables expanded to 43.
 
 ---
 

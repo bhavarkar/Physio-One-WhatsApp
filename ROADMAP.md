@@ -35,7 +35,7 @@ Each phase corresponds to discrete tasks defined in `PRD.md`:
 - **Task 6**: Clinical Appointments Engine & Availability Rules [COMPLETED]
 - **Task 7**: Multi-Provider LLM Gateway & Agent Runtime [COMPLETED]
 - **Task 8**: pgvector Memory & Clinic Knowledge Base (RAG) [COMPLETED]
-- **Task 9**: Inbound WhatsApp AI Receptionist (Deepti) [CURRENT]
+- **Task 9**: Inbound WhatsApp AI Receptionist (Deepti) [COMPLETED]
 - **Task 10**: 3-Touch Follow-Up Engine
 - **Task 11**: Instagram Re-engagement Campaigns
 - **Task 12**: Analytics Engine & Execution Logs

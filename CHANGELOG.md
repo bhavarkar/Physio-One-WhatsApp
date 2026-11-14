@@ -10,6 +10,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0-draft] - 2026-11-14
 
 ### Added
+- **Task 9: Inbound WhatsApp AI Receptionist (Deepti) Conversation Orchestration**:
+  - Authored Alembic migration `005_inbound_ai_orchestration.py` establishing 5 new database tables: `inbound_processing_jobs`, `ai_inbound_settings`, `conversation_handoffs`, `ai_response_drafts`, and `outbound_idempotency_keys` with foreign keys and compound performance indexes (total database tables: 43).
+  - Built durable PostgreSQL message queue & debouncer `InboundQueueService` (`backend/app/services/inbound_queue.py`) aggregating rapid patient burst messages within configurable debounce window (default 5s) into a single conversational turn with worker row-locking.
+  - Implemented `InboundOrchestrator` (`backend/app/services/inbound_orchestrator.py`) with strict multi-layer safety guardrails:
+    - **MANDATORY DEFAULT AI MODE**: Strictly `disabled`. `shadow` and `live` require explicit authorized activation.
+    - **Opt-Out Safety**: Case-insensitive keyword detection (STOP, UNSUBSCRIBE, CANCEL MESSAGES) automatically sets `contact.opted_out_all = True`, logs an immutable `ConversationHandoff` audit record, and completely suppresses automated replies.
+    - **Emergency Safety**: Emergency keyword detection (emergency, ambulance, severe pain, bleeding, chest pain, unconscious) immediately sets `conversation.is_human_takeover = True`, logs handoff audit event, and drafts emergency hospital guidance (112).
+    - **Human Takeover & AI Pause Enforcement**: Conversations with `is_human_takeover=True` or `ai_paused=True` immediately suppress AI processing.
+    - **Deepti Agent Runtime Execution**: Integrates conversation history, isolated patient memory, approved clinic RAG knowledge context, and read-only clinical tools (`check_availability` with strict Sunday closure and 09:00 - 20:00 IST operating hours via authoritative `AppointmentService`).
+    - **Shadow Mode Drafting**: Generates and persists full AI responses in `ai_response_drafts` for clinic staff review without sending ANY outbound messages to WhatsApp.
+    - **Live Mode Dispatch**: Only when explicitly activated, dispatches responses through `OutboundDispatcher`.
+  - Implemented `OutboundDispatcher` (`backend/app/services/outbound_dispatcher.py`) enforcing pre-dispatch state re-verification, once-and-only-once delivery via `OutboundIdempotencyKey`, and safe error logging on uncertain provider outcomes to prevent duplicate patient messaging.
+  - Integrated inbound message persistence with queueing in `whatsapp_service.py` (`process_incoming_webhook`).
+  - Built typed Pydantic schemas (`backend/app/schemas/inbound.py`) for live inbox conversations, messages, drafts, handoffs, and settings.
+  - Implemented authenticated REST API endpoints:
+    - `backend/app/api/v1/conversations.py`: `GET /api/v1/conversations`, `GET /api/v1/conversations/{id}`, `POST /api/v1/conversations/{id}/reply`, `POST /api/v1/conversations/{id}/takeover`, `POST /api/v1/conversations/{id}/pause-ai`, `POST /api/v1/conversations/{id}/resume-ai`.
+    - `backend/app/api/v1/ai_inbound.py`: `GET /api/v1/ai-inbound/settings`, `PATCH /api/v1/ai-inbound/settings` (Owner/Admin only with audit logging), `POST /api/v1/ai-inbound/process-due`, `GET /api/v1/ai-inbound/drafts`.
+    - Mounted routers in `backend/app/main.py`.
+  - Built frontend typed API client methods in `frontend/src/lib/api-client.ts`.
+  - Built full interactive Live Inbox dashboard (`frontend/src/app/(dashboard)/inbox/page.tsx`) with real-time conversations list, unread/draft badges, chat timeline, AI shadow draft viewer with "Use this Draft" shortcut, staff manual reply box with automatic takeover toggle, takeover/pause/resume action buttons, and AI Receptionist Settings modal (Disabled / Shadow / Live).
+  - Created automated backend test suite `backend/tests/test_inbound_orchestration.py` (8 integration tests covering debouncing, disabled default, shadow drafting, live dispatch & idempotency, opt-out suppression, emergency takeover, takeover/pause suppression, and API operations) — total backend regression suite: 96/96 passing (100%).
+  - Created frontend test suite `frontend/src/app/(dashboard)/inbox/inbox.test.tsx` (6 tests covering rendering, timeline, manual reply, takeover/pause, AI settings modal, and opt-out disabling) — total frontend suite: 36/36 passing across 10 suites (100%).
+  - Clean TypeScript verification with zero errors (`tsc --noEmit`).
+
 - **Task 8: pgvector Memory, Clinic Knowledge Base & Semantic Retrieval (RAG)**:
   - Authored Alembic migration `004_knowledge_base_pgvector_rag.py` establishing pgvector extension, adding document ingestion metadata (`source_hash`, `file_type`, `file_size_bytes`, `version`), chunk metadata, `ai_retrieval_logs` audit table, `AIAgent` RAG settings (`knowledge_base_id`, `rag_enabled`, `rag_similarity_threshold`, `rag_top_k`), and pgvector HNSW cosine index `ix_knowledge_chunks_embedding_hnsw` (total database tables: 38).
   - Built provider-independent embedding abstraction: `BaseEmbeddingProvider`, `EmbeddingError`, `EmbeddingDimensionMismatchError`, and `OpenAIEmbeddingProvider` targeting `text-embedding-3-small` (1536 dimensions) with batching and error normalization.

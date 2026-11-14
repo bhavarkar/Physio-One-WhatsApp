@@ -83,6 +83,29 @@ The platform handles patient communications, appointment schedules, and contact 
   - Semantic search and retrieval testing are restricted to `Operator`, `Admin`, and `Owner` roles.
   - All state-mutating document and knowledge base operations require valid CSRF double-submit token verification.
 
+### H. Inbound WhatsApp AI Receptionist & Safety Orchestration (Task 9)
+- **Default Inactive Safety Policy**:
+  - `ai_mode` defaults strictly to `disabled` in `AIInboundSettings`. Both `shadow` and `live` modes require explicit, authenticated administrative activation (`Owner` or `Admin`).
+  - At the completion of Task 9, live autonomous messaging is left in `disabled` state.
+- **Opt-Out Compliance (TRAI & WhatsApp Policy)**:
+  - Inbound messages containing opt-out keywords (`STOP`, `UNSUBSCRIBE`, `CANCEL MESSAGES`, `OPTOUT`) immediately set `contact.opted_out_all = True`.
+  - An immutable audit record is logged in `conversation_handoffs` (`action="opt_out_triggered"`).
+  - All future automated messages to the contact are strictly suppressed at the pre-dispatch gate.
+- **Emergency Keyword Detection & Safety Handover**:
+  - Inbound messages matching emergency keywords (`emergency`, `ambulance`, `severe pain`, `bleeding`, `chest pain`, `unconscious`) immediately trigger human takeover (`conversation.is_human_takeover = True`).
+  - An audit record is logged in `conversation_handoffs` (`action="emergency_detected"`).
+  - An emergency response is generated directing the patient to emergency hospital care (112), and clinic staff are alerted in the Live Inbox.
+- **Human Takeover & AI Pause Enforcement**:
+  - Conversations with `is_human_takeover=True` or `ai_paused=True` completely suppress automated AI processing.
+  - Sending a manual staff reply or clicking "Take Over" cancels pending debounce jobs to prevent race conditions between AI and human operators.
+- **Persistent Outbound Idempotency & Delivery Guarantees**:
+  - Every outbound reply requires an atomic `OutboundIdempotencyKey` record. Duplicate messages with the same idempotency key are rejected.
+  - Pre-flight gates re-verify `ai_mode == 'live'`, `is_human_takeover == False`, `ai_paused == False`, and `opted_out_all == False` immediately before network transmission.
+  - Uncertain provider delivery outcomes are recorded with error details rather than retried blindly, preventing duplicate patient messaging.
+- **Clinical Appointment Safety Boundaries**:
+  - Autonomous appointment creation, rescheduling, and cancellation remain completely DISABLED in Task 9.
+  - The read-only `check_availability` tool strictly enforces clinic operating hours (Monday to Saturday 09:00 - 20:00 IST) and Sunday closure via the authoritative `AppointmentService`.
+
 ---
 
 ## 3. Vulnerability Reporting & Patch Policy

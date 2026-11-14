@@ -399,6 +399,93 @@ export interface TestMessageResult {
   error: string | null;
 }
 
+export interface ConversationMessage {
+  id: string;
+  provider: string;
+  direction: 'inbound' | 'outbound';
+  message_type: string;
+  body: string | null;
+  media_url: string | null;
+  media_mime_type: string | null;
+  status: string;
+  error_message: string | null;
+  created_at: string;
+}
+
+export interface AIResponseDraft {
+  id: string;
+  conversation_id: string;
+  session_id: string | null;
+  agent_id: string | null;
+  inbound_job_id: string | null;
+  aggregated_inbound_text: string;
+  draft_text: string;
+  ai_mode: string;
+  dispatched: boolean;
+  outbound_message_id: string | null;
+  created_at: string;
+}
+
+export interface ConversationHandoff {
+  id: string;
+  conversation_id: string;
+  action: string;
+  from_state: string | null;
+  to_state: string | null;
+  reason: string | null;
+  actor_type: string;
+  actor_id: string | null;
+  created_at: string;
+}
+
+export interface ConversationListItem {
+  id: string;
+  contact_id: string;
+  contact_name: string | null;
+  contact_phone: string;
+  status: string;
+  is_human_takeover: boolean;
+  ai_paused: boolean;
+  opted_out: boolean;
+  last_message_at: string | null;
+  last_message_body: string | null;
+  last_message_direction: string | null;
+  unread_count: number;
+  pending_draft_count: number;
+  created_at: string;
+}
+
+export interface ConversationDetail {
+  id: string;
+  contact_id: string;
+  contact_name: string | null;
+  contact_phone: string;
+  status: string;
+  is_human_takeover: boolean;
+  ai_paused: boolean;
+  opted_out: boolean;
+  created_at: string;
+  updated_at: string | null;
+  messages: ConversationMessage[];
+  drafts: AIResponseDraft[];
+  handoffs: ConversationHandoff[];
+}
+
+export interface AIInboundSettings {
+  id: string;
+  account_id: string | null;
+  ai_mode: 'disabled' | 'shadow' | 'live';
+  active_agent_id: string | null;
+  active_agent_name: string | null;
+  debounce_seconds: number;
+  max_ai_steps: number;
+  processing_timeout_seconds: number;
+  opt_out_keywords: string[];
+  emergency_keywords: string[];
+  is_active: boolean;
+  updated_at: string | null;
+}
+
 export interface ApiErrorDetail {
   code?: string;
   message: string;
@@ -887,6 +974,76 @@ export const api = {
     apiFetch<void>(`/api/v1/knowledge/contacts/${contactId}/memories/${memoryId}`, {
       method: 'DELETE',
     }),
+
+  // Inbound Conversations & Live Inbox
+  getConversations: (params?: { status?: string; takeover_only?: boolean; search?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.takeover_only) searchParams.set('takeover_only', 'true');
+    if (params?.search) searchParams.set('search', params.search);
+    const qs = searchParams.toString();
+    return apiFetch<ConversationListItem[]>(`/api/v1/conversations${qs ? `?${qs}` : ''}`);
+  },
+
+  getConversationDetail: (conversationId: string) =>
+    apiFetch<ConversationDetail>(`/api/v1/conversations/${conversationId}`),
+
+  sendConversationReply: (conversationId: string, data: { message: string; takeover?: boolean }) =>
+    apiFetch<ConversationMessage>(`/api/v1/conversations/${conversationId}/reply`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  takeoverConversation: (conversationId: string, reason?: string) =>
+    apiFetch<{ status: string; is_human_takeover: boolean; message: string }>(
+      `/api/v1/conversations/${conversationId}/takeover`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      }
+    ),
+
+  pauseAiConversation: (conversationId: string, reason?: string) =>
+    apiFetch<{ status: string; ai_paused: boolean; message: string }>(
+      `/api/v1/conversations/${conversationId}/pause-ai`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      }
+    ),
+
+  resumeAiConversation: (conversationId: string) =>
+    apiFetch<{ status: string; is_human_takeover: boolean; ai_paused: boolean; message: string }>(
+      `/api/v1/conversations/${conversationId}/resume-ai`,
+      {
+        method: 'POST',
+      }
+    ),
+
+  getAiInboundSettings: () => apiFetch<AIInboundSettings>('/api/v1/ai-inbound/settings'),
+
+  updateAiInboundSettings: (data: {
+    ai_mode?: string;
+    active_agent_id?: string;
+    debounce_seconds?: number;
+    max_ai_steps?: number;
+    processing_timeout_seconds?: number;
+    opt_out_keywords?: string[];
+    emergency_keywords?: string[];
+    is_active?: boolean;
+  }) =>
+    apiFetch<AIInboundSettings>('/api/v1/ai-inbound/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  processDueInboundJobs: (limit?: number) =>
+    apiFetch<{ processed_count: number; jobs: Array<{ job_id: string; outcome: Record<string, unknown> }> }>(
+      `/api/v1/ai-inbound/process-due${limit ? `?limit=${limit}` : ''}`,
+      {
+        method: 'POST',
+      }
+    ),
 };
 
 export const apiClient = api;

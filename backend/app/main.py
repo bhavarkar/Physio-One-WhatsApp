@@ -10,7 +10,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import async_engine, Base
 import app.models  # noqa: F401
-from app.api.v1 import auth, users, whatsapp, webhooks, appointments, llm, agents, tools, knowledge
+from app.api.v1 import (
+    auth,
+    users,
+    whatsapp,
+    webhooks,
+    appointments,
+    llm,
+    agents,
+    tools,
+    knowledge,
+    conversations,
+    ai_inbound,
+)
 from app.services.agent_service import AgentService
 from app.core.database import AsyncSessionLocal
 from app.services.appointment_service import (
@@ -106,6 +118,8 @@ api_v1_router.include_router(llm.router)
 api_v1_router.include_router(agents.router)
 api_v1_router.include_router(tools.router)
 api_v1_router.include_router(knowledge.router)
+api_v1_router.include_router(conversations.router)
+api_v1_router.include_router(ai_inbound.router)
 
 app.include_router(api_v1_router)
 

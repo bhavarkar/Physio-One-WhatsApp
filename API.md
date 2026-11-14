@@ -198,6 +198,20 @@
 | `POST` | `/api/v1/knowledge/search` | Search knowledge chunks with cosine similarity | `Operator`+ |
 | `POST` | `/api/v1/knowledge/test-retrieval` | Test retrieval console with latency tracking | `Operator`+ |
 | `GET` | `/api/v1/knowledge/contacts/{id}/memories` | List persistent memories for a contact | `Operator`+ |
-| `POST` | `/api/v1/knowledge/contacts/{id}/memories` | Store durable contact memory | `Operator`+ |
-| `DELETE` | `/api/v1/knowledge/contacts/{id}/memories/{mem_id}` | Delete contact memory | `Admin`+ |
+---
+
+### M. Inbound AI Orchestration & Live Inbox (Task 9)
+| Method | Endpoint | Description | Role Required |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/conversations` | List conversation threads with contact, unread count, takeover status | `Viewer`+ |
+| `GET` | `/api/v1/conversations/{id}` | Retrieve conversation detail, message timeline, AI drafts, handoffs | `Viewer`+ |
+| `POST` | `/api/v1/conversations/{id}/reply` | Send manual staff reply to WhatsApp with optional takeover | `Operator`+ |
+| `POST` | `/api/v1/conversations/{id}/takeover` | Enable human staff takeover and cancel pending AI jobs | `Operator`+ |
+| `POST` | `/api/v1/conversations/{id}/pause-ai` | Pause automated AI responses for specific conversation | `Operator`+ |
+| `POST` | `/api/v1/conversations/{id}/resume-ai` | Resume automated AI responses and clear human takeover | `Operator`+ |
+| `GET` | `/api/v1/ai-inbound/settings` | Retrieve AI orchestration settings (mode: disabled, shadow, live) | `Viewer`+ |
+| `PATCH` | `/api/v1/ai-inbound/settings` | Update AI orchestration settings, mode, and debounce window | `Admin`+ |
+| `POST` | `/api/v1/ai-inbound/process-due` | Trigger execution of due debounced inbound jobs | `Operator`+ |
+| `GET` | `/api/v1/ai-inbound/drafts` | List AI generated response drafts for audit and review | `Viewer`+ |
+
 

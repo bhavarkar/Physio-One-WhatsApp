@@ -50,7 +50,7 @@ def test_1_database_connection_and_table_count(engine):
     """1. Test connection and verify all tables (including appointment_history and ai_retrieval_logs) are created in metadata."""
     assert engine is not None
     table_names = list(Base.metadata.tables.keys())
-    assert len(table_names) == 38
+    assert len(table_names) == 43
     assert "patients" in table_names
     assert "appointments" in table_names
     assert "appointment_history" in table_names
@@ -64,6 +64,11 @@ def test_1_database_connection_and_table_count(engine):
     assert "knowledge_chunks" in table_names
     assert "conversation_memory" in table_names
     assert "ai_retrieval_logs" in table_names
+    assert "inbound_processing_jobs" in table_names
+    assert "ai_inbound_settings" in table_names
+    assert "conversation_handoffs" in table_names
+    assert "ai_response_drafts" in table_names
+    assert "outbound_idempotency_keys" in table_names
 
 
 def test_2_roles_and_permissions_foreign_key(db_session):
