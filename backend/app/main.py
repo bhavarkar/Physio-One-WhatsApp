@@ -2,11 +2,14 @@
 
 Single Organization Edition: Physio One Clinic.
 """
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, APIRouter, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.database import async_engine, Base
+import app.models  # noqa: F401
 from app.api.v1 import auth, users, whatsapp, webhooks, appointments
 from app.services.appointment_service import (
     AppointmentServiceError,
@@ -19,12 +22,24 @@ from app.services.appointment_service import (
     PatientNotFoundError,
 )
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # If running with SQLite (e.g. local quickstart or testing), ensure tables are created
+    if async_engine.dialect.name == "sqlite":
+        async with async_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    yield
+    await async_engine.dispose()
+
+
 app = FastAPI(
     title=settings.APP_NAME,
     description="Production-ready WhatsApp AI Agent Platform for Physio One Clinic.",
     version="1.0.0-draft",
     docs_url="/docs" if settings.ENVIRONMENT != "production" else None,
     redoc_url="/redoc" if settings.ENVIRONMENT != "production" else None,
+    lifespan=lifespan,
 )
 
 @app.exception_handler(AppointmentServiceError)

@@ -120,3 +120,4 @@ def downgrade() -> None:
     op.drop_column("appointments", "updated_by_id")
     op.drop_column("appointments", "created_by_id")
     op.drop_column("appointments", "duration_minutes")
+
