@@ -31,8 +31,8 @@ Each phase corresponds to discrete tasks defined in `PRD.md`:
 - **Task 2**: Core Database Schema & Migrations
 - **Task 3**: Authentication & RBAC API
 - **Task 4**: Next.js Dashboard Foundation & Auth Shell
-- **Task 5**: Dashboard UI Sections (Inbox, Patients, Appointments, Settings)
-- **Task 6**: WhatsApp Webhook & Messaging Engine
+- **Task 5**: WhatsApp Provider Integration (Meta Cloud API & YCloud)
+- **Task 6**: Clinical Appointments Engine & Availability Rules
 - **Task 7**: Multi-Provider LLM Gateway & Agent Runtime
 - **Task 8**: pgvector Memory & Tool Registry
 - **Task 9**: Deepti Receptionist & Clinic Rules Engine
@@ -42,3 +42,4 @@ Each phase corresponds to discrete tasks defined in `PRD.md`:
 - **Task 13**: Production Docker Compose & Cloud Run Setup
 - **Task 14**: Versioned Update Manager & Safe Migrations
 - **Task 15**: E2E Testing, Security Hardening & Release Packaging
+

@@ -53,3 +53,4 @@ In each iteration of the Ralph Loop:
 7. **Commit Changes**: Create a clean git commit describing the completed task.
 8. **Completion Check**:
    - If ALL tasks in `PRD.md` are completed, append the Ralph completion marker (e.g. `ralph-done-<session-id>`) to the end of `progress.txt`.
+

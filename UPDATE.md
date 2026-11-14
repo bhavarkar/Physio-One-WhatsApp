@@ -91,3 +91,4 @@ flowchart TD
 - `scripts/restore.sh`: Interactive or headless point-in-time database restore script.
 - `scripts/update.sh`: Host-level automated update orchestrator.
 - `scripts/healthcheck.sh`: Comprehensive sanity check of all 6 containers, database connectivity, and Redis latency.
+

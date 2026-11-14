@@ -1,0 +1,138 @@
+version: "3.8"
+
+services:
+  # ----------------------------------------------------------------------------
+  # PostgreSQL 16 with pgvector extension enabled
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: physio_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-physio_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-physio_secure_password}
+      POSTGRES_DB: ${POSTGRES_DB:-physio_one_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - physio_network
+
+  # ----------------------------------------------------------------------------
+  # Redis 7 for message queue, debouncing, and rate limiting
+  # ----------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: physio_redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - physio_network
+
+  # ----------------------------------------------------------------------------
+  # One-shot database migration runner
+  # ----------------------------------------------------------------------------
+  migration:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: physio_migration
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-physio_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-physio_secure_password}
+      - POSTGRES_DB=${POSTGRES_DB:-physio_one_db}
+      - DATABASE_URL_SYNC=postgresql+psycopg2://${POSTGRES_USER:-physio_admin}:${POSTGRES_PASSWORD:-physio_secure_password}@postgres:5432/${POSTGRES_DB:-physio_one_db}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - physio_network
+
+  # ----------------------------------------------------------------------------
+  # FastAPI Backend API Service
+  # ----------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: physio_api
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-physio_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-physio_secure_password}
+      - POSTGRES_DB=${POSTGRES_DB:-physio_one_db}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-physio_admin}:${POSTGRES_PASSWORD:-physio_secure_password}@postgres:5432/${POSTGRES_DB:-physio_one_db}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
+    volumes:
+      - ./backend:/app
+      - media_storage:/app/storage
+    networks:
+      - physio_network
+
+  # ----------------------------------------------------------------------------
+  # Next.js Frontend Dashboard Service
+  # ----------------------------------------------------------------------------
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    container_name: physio_frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - INTERNAL_API_URL=http://api:8000
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - api
+    networks:
+      - physio_network
+
+volumes:
+  postgres_data:
+    name: physio_postgres_data
+  redis_data:
+    name: physio_redis_data
+  media_storage:
+    name: physio_media_storage
+
+networks:
+  physio_network:
+    name: physio_one_network
+    driver: bridge
+

@@ -151,3 +151,96 @@ sequenceDiagram
 | **Follow-up Eligibility** | Deterministic Pre-flight Filter | Checks `has_opted_out == False`, `has_upcoming_appointment == False`, `operator_takeover == False` before LLM is even invoked. |
 | **Campaign Window** | Celery Beat Time Window Check | Marketing messages are legally restricted to 09:00 - 21:00 IST. The scheduler strictly drops execution outside this window. |
 | **Conversation Synthesis** | LLM Gateway (Deepti Receptionist) | Polite, empathetic tone in Hindi, English, and Hinglish; understanding voice transcripts; conversational intent resolution. |
+
+---
+
+## 7. WhatsApp Provider Subsystem (Task 5)
+
+The WhatsApp messaging layer is decoupled through a common internal provider contract (`WhatsAppProvider`) supporting both official Meta WhatsApp Cloud API and YCloud (for existing Physio One operations):
+
+```
+                       ┌─────────────────────────┐
+                       │   FastAPI Webhook /     │
+                       │   Messaging Service     │
+                       └────────────┬────────────┘
+                                    │ (Resolves via Factory)
+                                    ▼
+                       ┌─────────────────────────┐
+                       │    WhatsAppProvider     │
+                       │   (Abstract Contract)   │
+                       └────────────┬────────────┘
+                                    │
+               ┌────────────────────┴────────────────────┐
+               ▼                                         ▼
+   ┌───────────────────────┐                 ┌───────────────────────┐
+   │   MetaCloudProvider   │                 │    YCloudProvider     │
+   │  (Graph API v20.0)    │                 │ (Existing Operations) │
+   └───────────┬───────────┘                 └───────────┬───────────┘
+               │                                         │
+               ▼                                         ▼
+    Meta WhatsApp Cloud API                     YCloud WhatsApp API
+```
+
+### Key Architectural Invariants:
+1. **Zero Multi-Tenancy**: All connection records and message streams belong exclusively to the single organization.
+2. **Encrypted Credential Storage**: All sensitive credentials (`access_token`, `secret_key`) are symmetrically encrypted with Fernet (AES-128-CBC + HMAC-SHA256) at rest. Tokens are decrypted only in memory when dispatching requests or verifying webhook signatures.
+3. **Dual Signature Verification**:
+   - Meta: Validates `X-Hub-Signature-256` header against raw request payload via HMAC-SHA256 with Meta App Secret. Supports GET `hub.challenge` handshake.
+   - YCloud: Validates `YCloud-Signature` header against raw request payload via HMAC-SHA256 with YCloud Webhook Secret.
+4. **Durable Ingress & Deduplication**:
+   - Every inbound webhook event is recorded in `webhook_events` with unique event ID constraint.
+   - Duplicate events are immediately dropped with HTTP 200 to prevent duplicate processing.
+   - Delivery status receipts (`sent`, `delivered`, `read`, `failed`) update the target message record without creating redundant message entities.
+
+---
+
+## 8. Clinical Appointments Engine & Availability Rules (Task 6)
+
+The appointment subsystem coordinates slot generation, availability checks, state transitions, and concurrency safety:
+
+```
+  ┌────────────────────────────────────────────────────────┐
+  │   Next.js Appointments UI / WhatsApp Tool Execution     │
+  └───────────────────────────┬────────────────────────────┘
+                              │ HTTP REST (JSON)
+                              ▼
+  ┌────────────────────────────────────────────────────────┐
+  │      FastAPI Router (/api/v1/appointments)             │
+  │  (Pydantic Validation + RBAC Permission Verification)  │
+  └───────────────────────────┬────────────────────────────┘
+                              │
+                              ▼
+  ┌────────────────────────────────────────────────────────┐
+  │               AppointmentService Layer                 │
+  │  - Sunday Closure Invariant (Asia/Kolkata timezone)    │
+  │  - Operating Hours Validation (09:00 - 20:00 IST)      │
+  │  - Slot Generation (30-min steps, 45-min duration)     │
+  │  - Overlap & Conflict Detection (active bookings)      │
+  │  - Concurrency Lock (asyncio lock + pg_advisory_lock)   │
+  │  - Audit Logging & Chronological Lifecycle History     │
+  └───────────────────────────┬────────────────────────────┘
+                              │
+                              ▼
+  ┌────────────────────────────────────────────────────────┐
+  │               PostgreSQL 16 Database                   │
+  │  - appointments table with chk_appointment_no_sunday   │
+  │  - btree_gist Range Exclusion Constraint               │
+  │  - appointment_history chronological audit entries     │
+  └────────────────────────────────────────────────────────┘
+```
+
+### Key Invariants:
+1. **Authoritative Sunday Restriction**:
+   - The clinic is strictly closed on Sundays.
+   - Sunday prohibition is evaluated against the clinic's local timezone (`Asia/Kolkata` / UTC+05:30), not the server's local or UTC day.
+   - Enforced authoritatively in `AppointmentService` for both creation and rescheduling, backed by SQL CHECK constraint `chk_appointment_no_sunday`.
+2. **Double-Booking & Concurrency Strategy**:
+   - Multi-tiered defense:
+     a. Application-level per-slot in-process async locks (`_booking_locks`) serialize simultaneous requests in the same process.
+     b. PostgreSQL transaction advisory locks (`pg_advisory_xact_lock`) serialize concurrent requests across multiple worker processes.
+     c. PostgreSQL range exclusion constraint (`uq_no_overlapping_active_appointments` via `btree_gist`) provides guaranteed database-level conflict rejection for non-cancelled/non-no-show appointments.
+3. **Non-Destructive Operations & Audit History**:
+   - Appointments are never physically deleted. Cancellations preserve the record with a mandatory reason code and optional notes.
+   - Every lifecycle transition (`created`, `rescheduled`, `cancelled`, `completed`, `no_show`, `updated`) appends an immutable entry to `appointment_history` capturing timestamps, actors, and state transitions.
+
+

@@ -22,26 +22,37 @@
 ### A. Authentication & User Management
 | Method | Endpoint | Description | Role Required |
 | :--- | :--- | :--- | :--- |
-| `POST` | `/api/v1/auth/login` | Authenticate user and issue JWT token in HTTP-only cookie | Public |
-| `POST` | `/api/v1/auth/logout` | Revoke session and clear cookies | Authenticated |
-| `POST` | `/api/v1/auth/refresh` | Rotate access token using refresh token | Authenticated |
-| `GET` | `/api/v1/auth/me` | Return profile and permissions of current user | Authenticated |
-| `GET` | `/api/v1/users` | List all staff users | `Admin`, `Super Admin` |
-| `POST` | `/api/v1/users` | Create a new staff user | `Admin`, `Super Admin` |
-| `PUT` | `/api/v1/users/{id}` | Update staff user details or status | `Admin`, `Super Admin` |
-| `DELETE` | `/api/v1/users/{id}` | Deactivate staff user | `Super Admin` |
-| `GET` | `/api/v1/roles` | List available system roles and permissions | `Admin`, `Super Admin` |
+| `GET` | `/api/v1/auth/setup-status` | Check if initial clinic Owner has been created | Public |
+| `POST` | `/api/v1/auth/setup` | One-time setup: initialize master Owner account | Public (Blocked once initialized) |
+| `POST` | `/api/v1/auth/login` | Authenticate staff user, issue HttpOnly `session_id` & `csrf_token` cookies | Public |
+| `POST` | `/api/v1/auth/logout` | Revoke current session and clear auth cookies | Authenticated |
+| `GET` | `/api/v1/auth/me` | Return profile and role of current authenticated staff user | Authenticated |
+| `GET` | `/api/v1/auth/sessions` | List all active sessions for current user | Authenticated |
+| `POST` | `/api/v1/auth/sessions/{id}/revoke` | Revoke a specific active session | Authenticated |
+| `POST` | `/api/v1/auth/sessions/revoke-all` | Revoke all sessions except current one | Authenticated |
+| `POST` | `/api/v1/auth/change-password` | Update user password with optional multi-session revocation | Authenticated |
+| `GET` | `/api/v1/users` | List staff users with pagination and search | `Owner`, `Admin` |
+| `POST` | `/api/v1/users` | Provision a new staff user account (Admins cannot create Owners) | `Owner`, `Admin` |
+| `GET` | `/api/v1/users/{id}` | Retrieve profile and role details of a specific user | `Owner`, `Admin` |
+| `PUT` | `/api/v1/users/{id}` | Update staff user details (Protected against last Owner demotion) | `Owner`, `Admin` |
+| `DELETE` | `/api/v1/users/{id}` | Deactivate staff user and terminate all active sessions | `Owner`, `Admin` |
+| `POST` | `/api/v1/users/{id}/revoke-sessions` | Force terminate all active sessions for a staff member | `Owner`, `Admin` |
+| `GET` | `/api/v1/users/roles` | List all available system roles and permissions | `Owner`, `Admin` |
 
 ---
 
-### B. WhatsApp Ingress & Messaging Adapters
+### B. WhatsApp Ingress & Provider Integration (Task 5)
 | Method | Endpoint | Description | Role Required |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/api/v1/whatsapp/webhook` | Meta Webhook challenge verification (`hub.challenge`) | Public |
-| `POST` | `/api/v1/whatsapp/webhook` | Inbound message and delivery status webhook receiver | Public (HMAC verified) |
-| `GET` | `/api/v1/whatsapp/templates`| List approved WhatsApp message templates from Meta | `Operator`+ |
-| `POST` | `/api/v1/whatsapp/templates/sync`| Trigger sync of Meta Cloud API templates | `Manager`+ |
-| `POST` | `/api/v1/whatsapp/send-template`| Send an outbound template message to a contact | `Operator`+ |
+| `GET` | `/api/v1/whatsapp/connections` | List configured WhatsApp connections with masked secrets | `Owner`, `Admin` |
+| `POST` | `/api/v1/whatsapp/connections` | Register a new Meta Cloud or YCloud provider connection | `Owner`, `Admin` |
+| `GET` | `/api/v1/whatsapp/connections/{id}` | Retrieve connection details with masked secrets | `Owner`, `Admin` |
+| `PUT` | `/api/v1/whatsapp/connections/{id}` | Update connection parameters or replace encrypted secrets | `Owner`, `Admin` |
+| `POST` | `/api/v1/whatsapp/connections/{id}/test` | Perform live provider handshake and connection validation | `Owner`, `Admin` |
+| `POST` | `/api/v1/whatsapp/connections/{id}/send-test` | Dispatch a live outbound test message to a recipient | `Owner`, `Admin` |
+| `GET` | `/api/v1/webhooks/whatsapp/meta` | Meta Webhook subscription verification (`hub.challenge`) | Public |
+| `POST` | `/api/v1/webhooks/whatsapp/meta` | Meta Cloud API inbound message and status receiver (`X-Hub-Signature-256`) | Public (HMAC verified) |
+| `POST` | `/api/v1/webhooks/whatsapp/ycloud` | YCloud inbound message and status update receiver (`YCloud-Signature`) | Public (HMAC verified) |
 
 ---
 
@@ -70,15 +81,28 @@
 
 ---
 
-### E. Appointments & Availability Engine
+### E. Appointments & Availability Engine (Task 6)
 | Method | Endpoint | Description | Role Required |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/api/v1/appointments/availability`| Query available time slots for a given date range. Enforces Sunday closure. | `Operator`+ / Tool |
-| `GET` | `/api/v1/appointments` | List appointments with filters (date range, status, practitioner) | `Operator`+ |
-| `POST` | `/api/v1/appointments` | Book appointment (ACID locked; rejects Sunday bookings) | `Operator`+ / Tool |
-| `GET` | `/api/v1/appointments/{id}`| Fetch appointment details | `Operator`+ |
-| `PUT` | `/api/v1/appointments/{id}/reschedule`| Reschedule appointment to a new slot (rejects Sunday) | `Operator`+ / Tool |
-| `POST` | `/api/v1/appointments/{id}/cancel`| Cancel appointment with reason code | `Operator`+ / Tool |
+| `GET` | `/api/v1/appointments/availability`| Query available time slots for a given date (`date=YYYY-MM-DD`, `duration_minutes=45`). Enforces hard Sunday closure. | `Viewer`+ (`appointments:read`) |
+| `GET` | `/api/v1/appointments` | List appointments with pagination, date range, status, patient ID, and text search | `Viewer`+ (`appointments:read`) |
+| `POST` | `/api/v1/appointments` | Create appointment (ACID locked; enforces Sunday restriction and working hours) | `Operator`+ (`appointments:create`) |
+| `GET` | `/api/v1/appointments/{id}`| Fetch full appointment details including patient and chronological history timeline | `Viewer`+ (`appointments:read`) |
+| `PATCH` | `/api/v1/appointments/{id}`| Update appointment metadata, notes, practitioner, or service type | `Operator`+ (`appointments:update`) |
+| `POST` | `/api/v1/appointments/{id}/reschedule`| Reschedule appointment to a new slot (enforces Sunday restriction & overlap check) | `Operator`+ (`appointments:update`) |
+| `POST` | `/api/v1/appointments/{id}/cancel`| Cancel appointment with cancellation reason and notes (record preserved) | `Operator`+ (`appointments:cancel`) |
+| `POST` | `/api/v1/appointments/{id}/complete`| Mark confirmed/scheduled appointment as completed with optional clinical notes | `Operator`+ (`appointments:complete`) |
+| `POST` | `/api/v1/appointments/{id}/no-show`| Mark appointment as no-show with optional operational notes | `Operator`+ (`appointments:no_show`) |
+
+#### Appointment Specific Error Codes
+| Code | HTTP Status | Description |
+| :--- | :--- | :--- |
+| `SUNDAY_RESTRICTION` | 422 Unprocessable Entity | Attempted booking or rescheduling on Sunday (clinic closed). |
+| `OPERATING_HOURS_VIOLATION` | 422 Unprocessable Entity | Attempted appointment outside operating hours (09:00 - 20:00 IST). |
+| `PAST_APPOINTMENT` | 422 Unprocessable Entity | Attempted booking or rescheduling in the past. |
+| `APPOINTMENT_CONFLICT` | 409 Conflict | Requested time slot overlaps with an existing active booking. |
+| `INVALID_STATUS_TRANSITION` | 400 Bad Request | Invalid lifecycle transition (e.g. rescheduling cancelled/completed appointment). |
+| `NOT_FOUND` | 404 Not Found | Specified appointment or patient does not exist. |
 
 ---
 
@@ -149,3 +173,4 @@
 | `POST` | `/api/v1/updates/check` | Probe remote registry for newer release tags | `Admin`+ |
 | `POST` | `/api/v1/updates/backup` | Trigger manual pre-update database snapshot | `Super Admin` |
 | `POST` | `/api/v1/updates/apply` | Execute automated upgrade pipeline | `Super Admin` |
+
