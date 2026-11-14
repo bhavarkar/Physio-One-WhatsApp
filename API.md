@@ -214,4 +214,20 @@
 | `POST` | `/api/v1/ai-inbound/process-due` | Trigger execution of due debounced inbound jobs | `Operator`+ |
 | `GET` | `/api/v1/ai-inbound/drafts` | List AI generated response drafts for audit and review | `Viewer`+ |
 
+---
+
+### N. Controlled AI Appointment Workflows (Task 10)
+| Method | Endpoint | Description | Role Required |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/appointment-workflows` | List AI appointment workflows with filter by status and intent | `Viewer`+ |
+| `GET` | `/api/v1/appointment-workflows/{id}` | Retrieve comprehensive workflow details, events, confirmations, approvals | `Viewer`+ |
+| `GET` | `/api/v1/appointment-workflows/approvals` | List all appointment workflows currently awaiting staff approval | `Viewer`+ |
+| `POST` | `/api/v1/appointment-workflows/{id}/approve` | Authorized staff member approves pending proposal; commits mutation | `Operator`+ |
+| `POST` | `/api/v1/appointment-workflows/{id}/reject` | Authorized staff member rejects pending proposal with reason | `Operator`+ |
+| `POST` | `/api/v1/appointment-workflows/{id}/request-clarification` | Request additional patient clarification (transitions back to collecting) | `Operator`+ |
+| `GET` | `/api/v1/appointment-workflows/{id}/history` | Chronological audit trail of state transitions and human actions | `Viewer`+ |
+| `GET` | `/api/v1/appointment-workflows/settings` | Retrieve appointment automation policy (Mode A/B/C) and timeouts | `Viewer`+ |
+| `PATCH` | `/api/v1/appointment-workflows/settings` | Update automation policy mode, confirmation requirements, timeouts | `Admin`+ |
+
+
 

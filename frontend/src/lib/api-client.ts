@@ -384,6 +384,101 @@ export interface AppointmentCancelData {
   notes?: string;
 }
 
+export interface AppointmentWorkflowEvent {
+  id: string;
+  workflow_id: string;
+  from_status: string | null;
+  to_status: string | null;
+  event_type: string;
+  actor_type: string;
+  actor_id: string | null;
+  payload: Record<string, any>;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface AppointmentConfirmation {
+  id: string;
+  workflow_id: string;
+  confirmation_token: string;
+  summary_text: string;
+  slot_start: string;
+  slot_end: string;
+  is_confirmed: boolean;
+  confirmed_at: string | null;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface AppointmentApprovalRequest {
+  id: string;
+  workflow_id: string;
+  workflow_version: number;
+  operation: string;
+  status: string;
+  proposal_summary: Record<string, any>;
+  staff_id: string | null;
+  decision_at: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface AppointmentWorkflow {
+  id: string;
+  conversation_id: string;
+  contact_id: string;
+  patient_id: string | null;
+  patient_name: string | null;
+  patient_phone: string | null;
+  appointment_id: string | null;
+  intent: string;
+  status: string;
+  workflow_version: number;
+  selected_slot_start: string | null;
+  selected_slot_end: string | null;
+  practitioner_name: string;
+  service_type: string;
+  duration_minutes: number;
+  collected_data: Record<string, any>;
+  proposed_changes: Record<string, any>;
+  confirmation_status: string;
+  confirmation_token: string | null;
+  confirmation_requested_at: string | null;
+  confirmed_at: string | null;
+  approval_status: string;
+  approved_by_id: string | null;
+  approved_at: string | null;
+  rejection_reason: string | null;
+  clarification_notes: string | null;
+  expires_at: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+  events?: AppointmentWorkflowEvent[];
+  confirmations?: AppointmentConfirmation[];
+  approval_requests?: AppointmentApprovalRequest[];
+}
+
+export interface AppointmentWorkflowListResponse {
+  items: AppointmentWorkflow[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface AppointmentWorkflowSettings {
+  id: string;
+  policy_mode: string;
+  require_patient_confirmation: boolean;
+  workflow_expiry_minutes: number;
+  confirmation_expiry_minutes: number;
+  max_reschedule_count: number;
+  allow_cancellation_within_hours: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ConnectionTestResult {
   is_valid: boolean;
   display_name: string | null;
@@ -781,6 +876,62 @@ export const api = {
     apiFetch<Appointment>(`/api/v1/appointments/${appointmentId}/no-show`, {
       method: 'POST',
       body: JSON.stringify(data || {}),
+    }),
+
+  // --- Appointment AI Workflows & Approvals (Task 10) ---
+  getAppointmentWorkflows: (params?: {
+    status?: string;
+    intent?: string;
+    conversation_id?: string;
+    patient_id?: string;
+    page?: number;
+    page_size?: number;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.intent) searchParams.set('intent', params.intent);
+    if (params?.conversation_id) searchParams.set('conversation_id', params.conversation_id);
+    if (params?.patient_id) searchParams.set('patient_id', params.patient_id);
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.page_size) searchParams.set('page_size', params.page_size.toString());
+    const qs = searchParams.toString();
+    return apiFetch<AppointmentWorkflowListResponse>(`/api/v1/appointment-workflows${qs ? `?${qs}` : ''}`);
+  },
+
+  getPendingApprovals: () =>
+    apiFetch<AppointmentWorkflow[]>('/api/v1/appointment-workflows/approvals'),
+
+  getAppointmentWorkflowDetails: (workflowId: string) =>
+    apiFetch<AppointmentWorkflow>(`/api/v1/appointment-workflows/${workflowId}`),
+
+  getAppointmentWorkflowHistory: (workflowId: string) =>
+    apiFetch<AppointmentWorkflowEvent[]>(`/api/v1/appointment-workflows/${workflowId}/history`),
+
+  approveAppointmentWorkflow: (workflowId: string, data?: { notes?: string }) =>
+    apiFetch<{ success: boolean; result: any }>(`/api/v1/appointment-workflows/${workflowId}/approve`, {
+      method: 'POST',
+      body: JSON.stringify(data || {}),
+    }),
+
+  rejectAppointmentWorkflow: (workflowId: string, data: { reason: string; notes?: string }) =>
+    apiFetch<{ success: boolean; result: any }>(`/api/v1/appointment-workflows/${workflowId}/reject`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  requestWorkflowClarification: (workflowId: string, data: { notes: string }) =>
+    apiFetch<{ success: boolean; result: any }>(`/api/v1/appointment-workflows/${workflowId}/request-clarification`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getAppointmentWorkflowSettings: () =>
+    apiFetch<AppointmentWorkflowSettings>('/api/v1/appointment-workflows/settings'),
+
+  updateAppointmentWorkflowSettings: (data: Partial<AppointmentWorkflowSettings>) =>
+    apiFetch<AppointmentWorkflowSettings>('/api/v1/appointment-workflows/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
     }),
 
   // --- LLM Providers & Models ---

@@ -22,8 +22,10 @@ from app.api.v1 import (
     knowledge,
     conversations,
     ai_inbound,
+    appointment_workflows,
 )
 from app.services.agent_service import AgentService
+from app.services.workflow_service import AppointmentWorkflowService
 from app.core.database import AsyncSessionLocal
 from app.services.appointment_service import (
     AppointmentServiceError,
@@ -47,6 +49,7 @@ async def lifespan(app: FastAPI):
         try:
             async with AsyncSessionLocal() as session:
                 await AgentService.ensure_default_ai_entities(session)
+                await AppointmentWorkflowService.get_or_create_settings(session)
         except Exception as e:
             # Non-blocking log if DB is pending migration
             import logging
@@ -120,6 +123,7 @@ api_v1_router.include_router(tools.router)
 api_v1_router.include_router(knowledge.router)
 api_v1_router.include_router(conversations.router)
 api_v1_router.include_router(ai_inbound.router)
+api_v1_router.include_router(appointment_workflows.router)
 
 app.include_router(api_v1_router)
 

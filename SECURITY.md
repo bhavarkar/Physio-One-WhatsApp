@@ -106,6 +106,30 @@ The platform handles patient communications, appointment schedules, and contact 
   - Autonomous appointment creation, rescheduling, and cancellation remain completely DISABLED in Task 9.
   - The read-only `check_availability` tool strictly enforces clinic operating hours (Monday to Saturday 09:00 - 20:00 IST) and Sunday closure via the authoritative `AppointmentService`.
 
+### I. Controlled AI Appointment Workflows & Safety State Machine (Task 10)
+- **Mandatory Default Policy Mode**:
+  - `policy_mode` in `AppointmentWorkflowSettings` defaults strictly to `mode_a_read_only`.
+  - In Mode A, Deepti is strictly read-only: she can answer questions and check availability, but ALL mutating tool operations (`create_appointment`, `reschedule_appointment`, `cancel_appointment`) are unconditionally blocked by the backend.
+  - Mode B (`mode_b_staff_approval`) and Mode C (`mode_c_auto_commit`) require explicit, authenticated Owner/Admin configuration. Mode C remains disabled.
+- **Backend Workflow State Machine Authority**:
+  - The LLM can never directly book, reschedule, or cancel appointments.
+  - All operations must transition through persistent state machine steps (`collecting_information` -> `checking_availability` -> `awaiting_slot_selection` -> `awaiting_patient_confirmation` -> `awaiting_staff_approval` -> `ready_to_commit` -> `committing` -> `confirmed`).
+  - Mutations are committed exclusively by `AppointmentWorkflowService` invoking the authoritative `AppointmentService`.
+- **Explicit Patient Confirmation & Anti-Hallucination Tokens**:
+  - The system never treats an AI statement or unverified intent extraction as patient confirmation.
+  - Slot selection generates a cryptographically random confirmation token (`conf_token`) and summary with an explicit expiration window (default 15 minutes).
+  - Explicit affirmative confirmation (`YES`, `CONFIRM`) from the patient is mandatory before proceeding to staff approval or commit.
+- **Staff Approval Queue Integrity**:
+  - Mode B requires an authorized staff member (`Operator`, `Admin`, or `Owner`) to review and explicitly approve or reject the proposal.
+  - Approval requests are tied to an immutable workflow version snapshot (`workflow_version`). If the patient requests changes, previous approvals become invalid.
+- **Cross-Patient Isolation & Privacy**:
+  - Read and mutate tools resolve patient context exclusively from the authorized WhatsApp conversation contact.
+  - Cross-patient lookups are strictly blocked with `ACCESS_DENIED`. Patients cannot view, modify, or cancel appointments belonging to other individuals.
+- **Transactional Idempotency & Conflict Protection**:
+  - Commits require a unique idempotency key (`AppointmentOperationIdempotency`), preventing duplicate bookings caused by webhook retries or concurrent requests.
+  - Availability is re-validated immediately before committing mutations.
+  - Inbound WhatsApp replies and autonomous mutations remain disabled at the conclusion of Task 10.
+
 ---
 
 ## 3. Vulnerability Reporting & Patch Policy

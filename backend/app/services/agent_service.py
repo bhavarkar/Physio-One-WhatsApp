@@ -39,16 +39,20 @@ logger = logging.getLogger("physio_one.agent_service")
 
 # Default Persona for Deepti
 DEEPTI_SYSTEM_PROMPT = """You are Deepti, the friendly, empathetic, and professional clinical receptionist for Physio One Clinic.
-Your role is to assist patients with general clinic inquiries, clinic timings, and appointment availability.
+Your role is to assist patients with general clinic inquiries, clinic timings, appointment availability, booking, rescheduling, and cancellations.
 
 Clinic Operating Rules:
 - Clinic Name: Physio One Clinic
-- Operating Hours: Monday to Saturday, 09:00 AM to 08:00 PM IST.
-- Sunday Closure: The clinic is strictly closed on Sundays. Never accept or suggest Sunday appointments.
+- Operating Hours: Monday to Saturday, 09:00 AM to 08:00 PM IST (Asia/Kolkata).
+- Sunday Closure: The clinic is strictly closed on Sundays. Never accept, suggest, or confirm Sunday appointments.
 - Communication Style: Empathetic, warm, clear, and reassuring. Communicate naturally in English, Hindi, or Hinglish depending on the patient's language.
-- Clinical Safety Guardrails: You are a receptionist, NOT a physiotherapist or doctor. Never prescribe medications, diagnose conditions, or provide clinical treatment advice. For medical emergencies or acute pain, advise visiting the clinic or consulting a physician immediately.
-- Availability Inquiries: Always use the check_availability tool to verify open appointment slots before answering scheduling questions.
-- Privacy Guardrail: Keep patient information confidential and follow clinic privacy policies.
+- Clinical Safety Guardrails: You are a receptionist, NOT a physiotherapist or doctor. Never prescribe medications, diagnose conditions, or provide clinical treatment advice. For medical emergencies or acute pain, advise visiting the nearest emergency hospital or calling 112 immediately.
+- Appointment Management Protocol:
+  1. For availability inquiries: Always query `check_availability` with the target date (YYYY-MM-DD). Never guess or invent slots. Present 2-3 specific available times clearly.
+  2. For new bookings: Start an appointment workflow with `start_appointment_workflow`. Once the patient chooses a slot, use `select_appointment_slot`.
+  3. Explicit Patient Confirmation: NEVER treat an assumption as confirmation. Always ask the patient explicitly to reply YES to confirm their proposed appointment slot.
+  4. Rescheduling and Cancellations: Look up the patient's existing appointment with `get_patient_appointments` before taking action. Confirm the exact appointment details with the patient first.
+  5. Privacy Guardrail: Keep all patient health and contact information strictly confidential. Never disclose one patient's appointments to another.
 """
 
 
@@ -170,7 +174,20 @@ class AgentService:
                 temperature=0.20,
                 max_tokens=1000,
                 supported_languages=["en", "hi", "hinglish"],
-                allowed_tools=["check_availability", "find_patient", "search_clinic_knowledge"],
+                allowed_tools=[
+                    "check_availability",
+                    "find_patient",
+                    "search_clinic_knowledge",
+                    "get_patient_appointments",
+                    "get_appointment_details",
+                    "start_appointment_workflow",
+                    "select_appointment_slot",
+                    "request_appointment_confirmation",
+                    "get_appointment_workflow_status",
+                    "create_appointment",
+                    "reschedule_appointment",
+                    "cancel_appointment",
+                ],
                 max_execution_steps=5,
                 execution_timeout_seconds=60,
                 context_budget_tokens=4000,
@@ -192,12 +209,46 @@ class AgentService:
                 temperature=0.20,
                 max_tokens=1000,
                 model_identifier=primary_model.model_identifier,
-                allowed_tools=["check_availability", "find_patient", "search_clinic_knowledge"],
+                allowed_tools=[
+                    "check_availability",
+                    "find_patient",
+                    "search_clinic_knowledge",
+                    "get_patient_appointments",
+                    "get_appointment_details",
+                    "start_appointment_workflow",
+                    "select_appointment_slot",
+                    "request_appointment_confirmation",
+                    "get_appointment_workflow_status",
+                    "create_appointment",
+                    "reschedule_appointment",
+                    "cancel_appointment",
+                ],
                 max_execution_steps=5,
                 change_summary="Initial system configuration and persona initialization.",
             )
             db.add(version_1)
             await db.flush()
+        else:
+            all_tools = [
+                "check_availability",
+                "find_patient",
+                "search_clinic_knowledge",
+                "get_patient_appointments",
+                "get_appointment_details",
+                "start_appointment_workflow",
+                "select_appointment_slot",
+                "request_appointment_confirmation",
+                "get_appointment_workflow_status",
+                "create_appointment",
+                "reschedule_appointment",
+                "cancel_appointment",
+            ]
+            current_tools = list(deepti.allowed_tools or [])
+            for t in all_tools:
+                if t not in current_tools:
+                    current_tools.append(t)
+            deepti.allowed_tools = current_tools
+            deepti.system_prompt = DEEPTI_SYSTEM_PROMPT
 
         await db.commit()
 

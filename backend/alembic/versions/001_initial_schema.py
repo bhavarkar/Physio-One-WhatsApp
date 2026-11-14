@@ -19,8 +19,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # 0. Enable pgvector extension
-    op.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+    # 0. Enable pgvector extension (PostgreSQL only)
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        op.execute("CREATE EXTENSION IF NOT EXISTS vector;")
 
     # 1. Access Control: roles
     op.create_table(

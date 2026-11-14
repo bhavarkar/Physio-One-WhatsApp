@@ -12,6 +12,21 @@ from app.tools.base import BaseTool
 from app.tools.clinical.availability import CheckAvailabilityTool
 from app.tools.clinical.patient import FindPatientTool
 from app.tools.clinical.knowledge import SearchClinicKnowledgeTool
+from app.tools.clinical.appointments_read import (
+    GetPatientAppointmentsTool,
+    GetAppointmentDetailsTool,
+)
+from app.tools.clinical.workflow_tools import (
+    StartAppointmentWorkflowTool,
+    SelectAppointmentSlotTool,
+    RequestAppointmentConfirmationTool,
+    GetAppointmentWorkflowStatusTool,
+)
+from app.tools.clinical.appointments_mutate import (
+    CreateAppointmentTool,
+    RescheduleAppointmentTool,
+    CancelAppointmentTool,
+)
 from app.llm.schemas import ToolDefinition
 from app.models.ai import AIToolDefinition
 
@@ -78,3 +93,12 @@ class ToolRegistry:
 ToolRegistry.register(CheckAvailabilityTool())
 ToolRegistry.register(FindPatientTool())
 ToolRegistry.register(SearchClinicKnowledgeTool())
+ToolRegistry.register(GetPatientAppointmentsTool())
+ToolRegistry.register(GetAppointmentDetailsTool())
+ToolRegistry.register(StartAppointmentWorkflowTool())
+ToolRegistry.register(SelectAppointmentSlotTool())
+ToolRegistry.register(RequestAppointmentConfirmationTool())
+ToolRegistry.register(GetAppointmentWorkflowStatusTool())
+ToolRegistry.register(CreateAppointmentTool())
+ToolRegistry.register(RescheduleAppointmentTool())
+ToolRegistry.register(CancelAppointmentTool())

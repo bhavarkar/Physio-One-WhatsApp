@@ -25,6 +25,9 @@ from app.agents.runtime import AgentRuntime, AgentRunResult
 from app.llm.schemas import ChatMessage, MessageRole
 from app.services.inbound_queue import InboundQueueService
 from app.services.outbound_dispatcher import OutboundDispatcher
+from app.services.intent_extractor import AppointmentIntentExtractor
+from app.services.workflow_service import AppointmentWorkflowService
+from app.schemas.workflow import WorkflowIntent, WorkflowState
 
 logger = logging.getLogger("physio_one.inbound.orchestrator")
 
@@ -179,6 +182,148 @@ class InboundOrchestrator:
             await InboundQueueService.release_job_lock(db, job.id, new_status="completed")
             return {"status": "skipped", "reason": "ai_mode_disabled"}
 
+        # 5b. Appointment Intent Detection & Explicit Workflow State Handling
+        intent_res = AppointmentIntentExtractor.extract_intent(aggregated_text)
+
+        # Explicit Human Assistance Request
+        if intent_res.intent == WorkflowIntent.REQUEST_HUMAN_ASSISTANCE:
+            logger.info("Human assistance requested in conversation %s", conversation.id)
+            conversation.is_human_takeover = True
+            handoff = ConversationHandoff(
+                conversation_id=conversation.id,
+                action="human_takeover",
+                from_state="ai_active",
+                to_state="human_takeover",
+                reason=f"Patient requested human assistance: '{aggregated_text[:50]}'",
+                actor_type="patient",
+            )
+            db.add(handoff)
+
+            active_wf = await AppointmentWorkflowService.get_active_workflow(db, conversation.id)
+            if active_wf:
+                active_wf.status = WorkflowState.HUMAN_HANDOFF.value
+
+            human_reply = (
+                "I have connected you with our clinic reception team. "
+                "A staff member will assist you shortly. You can also reach Physio One directly during clinic hours."
+            )
+            draft = AIResponseDraft(
+                conversation_id=conversation.id,
+                inbound_job_id=job.id,
+                aggregated_inbound_text=aggregated_text,
+                draft_text=human_reply,
+                ai_mode=settings.ai_mode,
+                dispatched=False,
+            )
+            db.add(draft)
+            await db.commit()
+
+            if settings.ai_mode == "live" and contact:
+                await OutboundDispatcher.dispatch_ai_reply(
+                    db=db,
+                    conversation=conversation,
+                    contact=contact,
+                    provider=job.provider,
+                    reply_text=human_reply,
+                    idempotency_key=f"human_handoff_{job.id}",
+                    settings=settings,
+                )
+
+            await InboundQueueService.release_job_lock(db, job.id, new_status="completed")
+            return {"status": "human_handoff", "reason": "patient_requested_human"}
+
+        # Check for active workflow awaiting patient confirmation
+        active_wf = await AppointmentWorkflowService.get_active_workflow(db, conversation.id)
+        if active_wf and active_wf.status == WorkflowState.AWAITING_PATIENT_CONFIRMATION.value:
+            if intent_res.is_explicit_confirmation is True:
+                conf_result = await AppointmentWorkflowService.process_patient_confirmation(
+                    db=db,
+                    workflow_id=active_wf.id,
+                    is_confirmed=True,
+                    notes=f"Confirmed via WhatsApp message: '{aggregated_text}'",
+                )
+                disp_str = active_wf.proposed_changes.get("formatted_display") or "your requested appointment"
+                if conf_result.get("status") == "confirmed":
+                    reply_text = (
+                        f"Your appointment on {disp_str} has been successfully confirmed and booked. "
+                        "We look forward to seeing you at Physio One Clinic!"
+                    )
+                else:
+                    reply_text = (
+                        f"Thank you for confirming your appointment on {disp_str}. "
+                        "Our clinic staff will review and finalize your booking. We will send you a confirmation shortly."
+                    )
+
+                draft = AIResponseDraft(
+                    conversation_id=conversation.id,
+                    inbound_job_id=job.id,
+                    aggregated_inbound_text=aggregated_text,
+                    draft_text=reply_text,
+                    ai_mode=settings.ai_mode,
+                    dispatched=False,
+                )
+                db.add(draft)
+                await db.commit()
+
+                if settings.ai_mode == "live" and contact:
+                    await OutboundDispatcher.dispatch_ai_reply(
+                        db=db,
+                        conversation=conversation,
+                        contact=contact,
+                        provider=job.provider,
+                        reply_text=reply_text,
+                        idempotency_key=f"confirm_reply_{active_wf.id}_{job.id}",
+                        settings=settings,
+                    )
+
+                await InboundQueueService.release_job_lock(db, job.id, new_status="completed")
+                return {
+                    "status": "confirmation_handled",
+                    "workflow_id": str(active_wf.id),
+                    "confirmation_result": conf_result,
+                    "draft_text": reply_text,
+                }
+
+            elif intent_res.is_explicit_confirmation is False:
+                await AppointmentWorkflowService.process_patient_confirmation(
+                    db=db,
+                    workflow_id=active_wf.id,
+                    is_confirmed=False,
+                    notes=f"Declined via WhatsApp message: '{aggregated_text}'",
+                )
+                cancel_reply = (
+                    "Your appointment proposal has been cancelled as requested. "
+                    "Please let me know if you would like to check availability for another day or time."
+                )
+                draft = AIResponseDraft(
+                    conversation_id=conversation.id,
+                    inbound_job_id=job.id,
+                    aggregated_inbound_text=aggregated_text,
+                    draft_text=cancel_reply,
+                    ai_mode=settings.ai_mode,
+                    dispatched=False,
+                )
+                db.add(draft)
+                await db.commit()
+
+                if settings.ai_mode == "live" and contact:
+                    await OutboundDispatcher.dispatch_ai_reply(
+                        db=db,
+                        conversation=conversation,
+                        contact=contact,
+                        provider=job.provider,
+                        reply_text=cancel_reply,
+                        idempotency_key=f"cancel_reply_{active_wf.id}_{job.id}",
+                        settings=settings,
+                    )
+
+                await InboundQueueService.release_job_lock(db, job.id, new_status="completed")
+                return {
+                    "status": "confirmation_cancelled",
+                    "workflow_id": str(active_wf.id),
+                    "draft_text": cancel_reply,
+                }
+
         # 6. Resolve Active AI Agent (Deepti Receptionist)
         agent = None
         if settings.active_agent_id:
@@ -227,6 +372,8 @@ class InboundOrchestrator:
             "contact_id": str(contact.id) if contact else None,
             "rag_enabled": True,
             "knowledge_base_id": str(agent.knowledge_base_id) if agent.knowledge_base_id else None,
+            "workflow_id": str(active_wf.id) if active_wf else None,
+            "workflow_status": active_wf.status if active_wf else None,
         }
 
         try:

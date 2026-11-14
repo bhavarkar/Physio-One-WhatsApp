@@ -10,6 +10,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0-draft] - 2026-11-14
 
 ### Added
+- **Task 10: Controlled Appointment Management Through Deepti AI Receptionist**:
+  - Authored Alembic migration `006_appointment_ai_workflows.py` establishing 6 new database tables: `appointment_ai_workflows`, `appointment_workflow_events`, `appointment_confirmations`, `appointment_approval_requests`, `appointment_operation_idempotency`, and `appointment_workflow_settings` with full SQLite and PostgreSQL dialect support (total database tables: 49).
+  - Built `AppointmentIntentExtractor` (`backend/app/services/intent_extractor.py`) parsing appointment intents (`book_appointment`, `check_availability`, `reschedule_appointment`, `cancel_appointment`, `check_appointment_status`, `request_human_assistance`) and detecting explicit confirmation ("YES", "CONFIRM") and cancellation ("NO", "CANCEL") in `Asia/Kolkata` timezone.
+  - Implemented `AppointmentWorkflowService` (`backend/app/services/workflow_service.py`) governing a 12-state persistent FSM (`collecting_information`, `checking_availability`, `awaiting_slot_selection`, `awaiting_patient_confirmation`, `awaiting_staff_approval`, `ready_to_commit`, `committing`, `confirmed`, `cancelled`, `expired`, `failed`, `human_handoff`):
+    - Re-validates slot availability via authoritative `AppointmentService` respecting Sunday closure and 09:00 - 20:00 clinic hours.
+    - Generates cryptographically random confirmation tokens and formatted summary strings with configurable expiration (default 15 minutes).
+    - Enforces three automation policy modes: Mode A (Read Only - **mandatory default**), Mode B (Staff Approval), and Mode C (Controlled Automatic Commit - disabled).
+    - Handles staff approvals, rejections with reasons, and clarification requests with workflow version snapshot validation.
+    - Commits mutations transactionally against `AppointmentService` with `AppointmentOperationIdempotency` deduplication.
+  - Developed and registered 10 controlled clinical agent tools:
+    - Read tools: `check_availability`, `get_patient_appointments`, `get_appointment_details` with cross-patient privacy boundary enforcement.
+    - Workflow tools: `start_appointment_workflow`, `select_appointment_slot`, `request_appointment_confirmation`, `get_appointment_workflow_status`.
+    - Mutating tools: `create_appointment`, `reschedule_appointment`, `cancel_appointment` with FSM state, confirmation token, and policy mode protection.
+  - Integrated workflow state machine and intent extraction into `InboundOrchestrator` (`backend/app/services/inbound_orchestrator.py`).
+  - Implemented authenticated REST API endpoints in `backend/app/api/v1/appointment_workflows.py`:
+    - `GET /api/v1/appointment-workflows`, `GET /api/v1/appointment-workflows/{id}`, `GET /api/v1/appointment-workflows/approvals`, `POST /api/v1/appointment-workflows/{id}/approve`, `POST /api/v1/appointment-workflows/{id}/reject`, `POST /api/v1/appointment-workflows/{id}/request-clarification`, `GET /api/v1/appointment-workflows/{id}/history`, `GET /api/v1/appointment-workflows/settings`, `PATCH /api/v1/appointment-workflows/settings`.
+  - Built frontend typed API client methods in `frontend/src/lib/api-client.ts`.
+  - Built Human Approval Dashboard queue in `frontend/src/app/(dashboard)/appointments/page.tsx` featuring tabbed interface ("Confirmed Appointments", "AI Approval Queue" with pending count badge, "All AI Workflows"), policy mode indicator banner, approval/rejection/clarification action modals, and audit timeline drawer.
+  - Created automated backend test suite `backend/tests/test_appointment_workflows.py` (10 comprehensive tests) — full backend regression suite: 106/106 tests passing (100%).
+  - Extended frontend test suite `frontend/src/app/(dashboard)/appointments/appointments.test.tsx` (9 tests) — full frontend suite: 39/39 tests passing across 10 suites (100%).
+  - Clean TypeScript verification with zero errors (`tsc --noEmit`).
+
 - **Task 9: Inbound WhatsApp AI Receptionist (Deepti) Conversation Orchestration**:
   - Authored Alembic migration `005_inbound_ai_orchestration.py` establishing 5 new database tables: `inbound_processing_jobs`, `ai_inbound_settings`, `conversation_handoffs`, `ai_response_drafts`, and `outbound_idempotency_keys` with foreign keys and compound performance indexes (total database tables: 43).
   - Built durable PostgreSQL message queue & debouncer `InboundQueueService` (`backend/app/services/inbound_queue.py`) aggregating rapid patient burst messages within configurable debounce window (default 5s) into a single conversational turn with worker row-locking.

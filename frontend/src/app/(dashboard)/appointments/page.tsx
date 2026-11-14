@@ -9,6 +9,9 @@ import {
   TimeSlot,
   AvailabilityResponse,
   AppointmentStatusType,
+  AppointmentWorkflow,
+  AppointmentWorkflowEvent,
+  AppointmentWorkflowSettings,
 } from '@/lib/api-client';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,6 +37,13 @@ import {
   CalendarX,
   History,
   Lock,
+  Bot,
+  ShieldCheck,
+  Check,
+  X,
+  MessageSquare,
+  ExternalLink,
+  HelpCircle,
 } from 'lucide-react';
 
 // Format UTC/ISO timestamp to IST (Asia/Kolkata) display
@@ -129,6 +139,60 @@ export default function AppointmentsPage() {
   }>({ isOpen: false, type: 'complete', appointment: null });
   const [actionNotes, setActionNotes] = useState('');
   const [isActionLoading, setIsActionLoading] = useState(false);
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'calendar' | 'approvals' | 'workflows'>('calendar');
+
+  // AI Workflows & Approvals state
+  const [pendingApprovals, setPendingApprovals] = useState<AppointmentWorkflow[]>([]);
+  const [isApprovalsLoading, setIsApprovalsLoading] = useState(false);
+  const [allWorkflows, setAllWorkflows] = useState<AppointmentWorkflow[]>([]);
+  const [workflowSettings, setWorkflowSettings] = useState<AppointmentWorkflowSettings | null>(null);
+
+  // Workflow Action Modal (Approve, Reject, Clarification, View Timeline)
+  const [workflowActionModal, setWorkflowActionModal] = useState<{
+    isOpen: boolean;
+    type: 'approve' | 'reject' | 'clarify' | 'timeline';
+    workflow: AppointmentWorkflow | null;
+  }>({ isOpen: false, type: 'approve', workflow: null });
+  const [wfActionReason, setWfActionReason] = useState('');
+  const [wfActionNotes, setWfActionNotes] = useState('');
+  const [isWfActionLoading, setIsWfActionLoading] = useState(false);
+
+  const fetchPendingApprovals = useCallback(async () => {
+    try {
+      setIsApprovalsLoading(true);
+      const data = await api.getPendingApprovals();
+      setPendingApprovals(data);
+    } catch {
+      // Non-blocking
+    } finally {
+      setIsApprovalsLoading(false);
+    }
+  }, []);
+
+  const fetchAllWorkflows = useCallback(async () => {
+    try {
+      const res = await api.getAppointmentWorkflows({ page: 1, page_size: 50 });
+      setAllWorkflows(res.items);
+    } catch {
+      // Non-blocking
+    }
+  }, []);
+
+  const fetchWorkflowSettings = useCallback(async () => {
+    try {
+      const res = await api.getAppointmentWorkflowSettings();
+      setWorkflowSettings(res);
+    } catch {
+      // Non-blocking
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPendingApprovals();
+    fetchWorkflowSettings();
+  }, [fetchPendingApprovals, fetchWorkflowSettings]);
 
   // Fetch appointments list
   const fetchAppointments = useCallback(async () => {
@@ -374,6 +438,87 @@ export default function AppointmentsPage() {
     }
   };
 
+  const getWorkflowStatusBadge = (wfStatus: string) => {
+    switch (wfStatus) {
+      case 'confirmed':
+        return <Badge variant="success">Confirmed</Badge>;
+      case 'awaiting_staff_approval':
+        return <Badge variant="destructive">Needs Staff Approval</Badge>;
+      case 'awaiting_patient_confirmation':
+        return <Badge variant="warning">Awaiting Patient Confirm</Badge>;
+      case 'ready_to_commit':
+        return <Badge variant="secondary">Ready To Commit</Badge>;
+      case 'collecting_information':
+        return <Badge variant="outline">Collecting Info</Badge>;
+      case 'checking_availability':
+        return <Badge variant="outline">Checking Availability</Badge>;
+      case 'cancelled':
+        return <Badge variant="secondary">Cancelled</Badge>;
+      case 'expired':
+        return <Badge variant="secondary">Expired</Badge>;
+      case 'failed':
+        return <Badge variant="destructive">Failed</Badge>;
+      case 'human_handoff':
+        return <Badge variant="warning">Human Handoff</Badge>;
+      default:
+        return <Badge>{wfStatus}</Badge>;
+    }
+  };
+
+  const handleApproveWorkflow = async (workflow: AppointmentWorkflow) => {
+    try {
+      setIsWfActionLoading(true);
+      await api.approveAppointmentWorkflow(workflow.id, { notes: wfActionNotes });
+      setFeedback({ type: 'success', message: 'Appointment proposal approved and successfully committed!' });
+      setWorkflowActionModal({ isOpen: false, type: 'approve', workflow: null });
+      fetchPendingApprovals();
+      fetchAllWorkflows();
+      fetchAppointments();
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err.message || 'Failed to approve workflow.' });
+    } finally {
+      setIsWfActionLoading(false);
+    }
+  };
+
+  const handleRejectWorkflow = async (workflow: AppointmentWorkflow) => {
+    if (!wfActionReason.trim()) {
+      setFeedback({ type: 'error', message: 'Rejection reason is required.' });
+      return;
+    }
+    try {
+      setIsWfActionLoading(true);
+      await api.rejectAppointmentWorkflow(workflow.id, { reason: wfActionReason, notes: wfActionNotes });
+      setFeedback({ type: 'success', message: 'Appointment proposal rejected.' });
+      setWorkflowActionModal({ isOpen: false, type: 'reject', workflow: null });
+      fetchPendingApprovals();
+      fetchAllWorkflows();
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err.message || 'Failed to reject workflow.' });
+    } finally {
+      setIsWfActionLoading(false);
+    }
+  };
+
+  const handleClarifyWorkflow = async (workflow: AppointmentWorkflow) => {
+    if (!wfActionNotes.trim()) {
+      setFeedback({ type: 'error', message: 'Clarification question or note is required.' });
+      return;
+    }
+    try {
+      setIsWfActionLoading(true);
+      await api.requestWorkflowClarification(workflow.id, { notes: wfActionNotes });
+      setFeedback({ type: 'success', message: 'Clarification requested from patient.' });
+      setWorkflowActionModal({ isOpen: false, type: 'clarify', workflow: null });
+      fetchPendingApprovals();
+      fetchAllWorkflows();
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err.message || 'Failed to request clarification.' });
+    } finally {
+      setIsWfActionLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -415,7 +560,63 @@ export default function AppointmentsPage() {
         </Alert>
       )}
 
-      {/* Filters Card */}
+      {/* Navigation Tabs */}
+      <div className="flex border-b border-slate-200 gap-6">
+        <button
+          onClick={() => setActiveTab('calendar')}
+          className={`pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+            activeTab === 'calendar'
+              ? 'border-indigo-600 text-indigo-600 font-semibold'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <Calendar className="h-4 w-4" />
+          <span>Confirmed Appointments</span>
+          <Badge variant="secondary" className="text-xs">{totalAppointments}</Badge>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('approvals');
+            fetchPendingApprovals();
+          }}
+          className={`pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+            activeTab === 'approvals'
+              ? 'border-indigo-600 text-indigo-600 font-semibold'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <Bot className="h-4 w-4 text-purple-600" />
+          <span>AI Approval Queue</span>
+          {pendingApprovals.length > 0 && (
+            <Badge variant="destructive" className="text-xs px-1.5 py-0.5">
+              {pendingApprovals.length}
+            </Badge>
+          )}
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('workflows');
+            fetchAllWorkflows();
+          }}
+          className={`pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+            activeTab === 'workflows'
+              ? 'border-indigo-600 text-indigo-600 font-semibold'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <History className="h-4 w-4" />
+          <span>All AI Workflows</span>
+          {allWorkflows.length > 0 && (
+            <Badge variant="secondary" className="text-xs">{allWorkflows.length}</Badge>
+          )}
+        </button>
+      </div>
+
+      {activeTab === 'calendar' && (
+        <>
+          {/* Filters Card */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col lg:flex-row gap-4">
@@ -549,6 +750,248 @@ export default function AppointmentsPage() {
           )}
         </CardContent>
       </Card>
+      </>
+      )}
+
+      {activeTab === 'approvals' && (
+        <div className="space-y-4">
+          {/* Policy Banner */}
+          <Card className="bg-slate-50 border-slate-200">
+            <CardContent className="pt-4 pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm text-slate-700">
+                <ShieldCheck className="h-5 w-5 text-indigo-600 flex-shrink-0" />
+                <div>
+                  <span className="font-semibold text-slate-900">Current Automation Policy: </span>
+                  <Badge variant="outline" className="ml-1 text-xs uppercase font-mono">
+                    {workflowSettings?.policy_mode || 'mode_a_read_only'}
+                  </Badge>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {workflowSettings?.policy_mode === 'mode_a_read_only'
+                      ? 'Mode A (Default): Deepti provides availability & collects requests. Human staff must approve every mutation before database commit.'
+                      : workflowSettings?.policy_mode === 'mode_b_staff_approval'
+                      ? 'Mode B: Patient confirms proposed slot, then operation waits for staff approval before commit.'
+                      : 'Mode C: Controlled Automatic Commit enabled for verified patients.'}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchPendingApprovals}
+                className="flex items-center gap-1.5 flex-shrink-0"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Refresh Queue
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Pending Approvals Table */}
+          <Card>
+            <CardHeader className="border-b border-slate-100 pb-4">
+              <CardTitle className="text-base flex items-center justify-between">
+                <span>Pending AI Appointment Proposals</span>
+                <span className="text-xs font-normal text-slate-500">{pendingApprovals.length} pending approval</span>
+              </CardTitle>
+              <CardDescription>
+                Proposals prepared by Deepti AI Receptionist awaiting staff review before committing to the calendar.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              {isApprovalsLoading ? (
+                <div className="py-16 text-center text-sm text-slate-500 space-y-2">
+                  <RefreshCw className="h-6 w-6 animate-spin mx-auto text-indigo-600" />
+                  <p>Loading pending proposals...</p>
+                </div>
+              ) : pendingApprovals.length === 0 ? (
+                <div className="py-16 text-center text-slate-500 space-y-3">
+                  <CheckCircle2 className="h-10 w-10 mx-auto text-emerald-400" />
+                  <p className="font-medium text-slate-700">Approval Queue is Clear</p>
+                  <p className="text-xs max-w-sm mx-auto text-slate-400">
+                    No pending appointment bookings, reschedules, or cancellations require staff review right now.
+                  </p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Patient & Contact</TableHead>
+                      <TableHead>Requested Operation</TableHead>
+                      <TableHead>Proposed Slot (IST)</TableHead>
+                      <TableHead>Patient Confirmation</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="text-right">Staff Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pendingApprovals.map((wf) => (
+                      <TableRow key={wf.id} className="hover:bg-slate-50/70">
+                        <TableCell>
+                          <div className="font-medium text-slate-900">{wf.patient_name || 'Patient'}</div>
+                          <div className="text-xs text-slate-500 flex items-center gap-1">
+                            <Phone className="h-3 w-3" />
+                            {wf.patient_phone || 'WhatsApp Contact'}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize text-xs">
+                            {wf.intent.replace('_', ' ')}
+                          </Badge>
+                          <div className="text-xs text-slate-500 mt-0.5">{wf.service_type}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-medium text-slate-800">
+                            {wf.proposed_changes?.formatted_display || (wf.selected_slot_start ? formatISTDateTime(wf.selected_slot_start) : 'Not specified')}
+                          </div>
+                          <div className="text-xs text-slate-500">Dr. Physio One ({wf.duration_minutes}m)</div>
+                        </TableCell>
+                        <TableCell>
+                          {wf.confirmation_status === 'confirmed' ? (
+                            <Badge variant="success" className="text-xs">Confirmed by Patient</Badge>
+                          ) : (
+                            <Badge variant="warning" className="text-xs">Awaiting Confirmation</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-500">
+                          {formatISTDateTime(wf.created_at)}
+                        </TableCell>
+                        <TableCell className="text-right space-x-1.5" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            size="sm"
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                            onClick={() => {
+                              setWfActionNotes('');
+                              setWorkflowActionModal({ isOpen: true, type: 'approve', workflow: wf });
+                            }}
+                            disabled={isViewer}
+                          >
+                            <Check className="h-3.5 w-3.5 mr-1" />
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => {
+                              setWfActionReason('');
+                              setWfActionNotes('');
+                              setWorkflowActionModal({ isOpen: true, type: 'reject', workflow: wf });
+                            }}
+                            disabled={isViewer}
+                          >
+                            <X className="h-3.5 w-3.5 mr-1" />
+                            Reject
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setWfActionNotes('');
+                              setWorkflowActionModal({ isOpen: true, type: 'clarify', workflow: wf });
+                            }}
+                            disabled={isViewer}
+                          >
+                            <HelpCircle className="h-3.5 w-3.5 mr-1" />
+                            Clarify
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setWorkflowActionModal({ isOpen: true, type: 'timeline', workflow: wf })}
+                          >
+                            <History className="h-3.5 w-3.5" />
+                          </Button>
+                          <a
+                            href={`/inbox?conversation_id=${wf.conversation_id}`}
+                            className="inline-flex items-center justify-center p-1.5 text-slate-500 hover:text-indigo-600 rounded-md border border-slate-200 hover:bg-slate-50"
+                            title="Take over conversation in Live Inbox"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 'workflows' && (
+        <Card>
+          <CardHeader className="border-b border-slate-100 pb-4">
+            <CardTitle className="text-base flex items-center justify-between">
+              <span>All AI Appointment Workflows</span>
+              <Button variant="outline" size="sm" onClick={fetchAllWorkflows}>
+                <RefreshCw className="h-3.5 w-3.5 mr-1" /> Refresh
+              </Button>
+            </CardTitle>
+            <CardDescription>
+              Complete history of AI-managed booking, rescheduling, and cancellation lifecycles across conversations.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            {allWorkflows.length === 0 ? (
+              <div className="py-16 text-center text-slate-500 space-y-3">
+                <Bot className="h-10 w-10 mx-auto text-slate-300" />
+                <p className="font-medium text-slate-700">No AI Workflows Recorded</p>
+                <p className="text-xs max-w-sm mx-auto text-slate-400">
+                  Appointment workflows initiated by patients through WhatsApp will appear here with full audit logs.
+                </p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Workflow ID & Patient</TableHead>
+                    <TableHead>Intent</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Proposed Slot</TableHead>
+                    <TableHead>Confirmation</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {allWorkflows.map((wf) => (
+                    <TableRow key={wf.id} className="hover:bg-slate-50/70">
+                      <TableCell>
+                        <div className="font-mono text-xs text-slate-400">{wf.id.slice(0, 8)}...</div>
+                        <div className="font-medium text-slate-900">{wf.patient_name || 'Patient'}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="capitalize text-xs">
+                          {wf.intent.replace('_', ' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{getWorkflowStatusBadge(wf.status)}</TableCell>
+                      <TableCell className="text-xs text-slate-700">
+                        {wf.proposed_changes?.formatted_display || (wf.selected_slot_start ? formatISTDateTime(wf.selected_slot_start) : '-')}
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-xs capitalize">{wf.confirmation_status}</span>
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-500">
+                        {formatISTDateTime(wf.created_at)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setWorkflowActionModal({ isOpen: true, type: 'timeline', workflow: wf })}
+                        >
+                          Audit Timeline
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* ----------------- MODAL 1: Book Appointment Dialog ----------------- */}
       <Dialog
@@ -954,6 +1397,203 @@ export default function AppointmentsPage() {
             </Button>
             <Button onClick={handleExecuteAction} disabled={isActionLoading}>
               {isActionLoading ? 'Updating...' : 'Confirm'}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* ----------------- MODAL 6: Workflow Timeline / Details Dialog ----------------- */}
+      <Dialog
+        isOpen={workflowActionModal.isOpen && workflowActionModal.type === 'timeline'}
+        onClose={() => setWorkflowActionModal({ isOpen: false, type: 'timeline', workflow: null })}
+        title="AI Workflow Audit Timeline"
+        description="Immutable lifecycle events, intent detection, and patient confirmation timestamps."
+      >
+        <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+          {workflowActionModal.workflow && (
+            <>
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs space-y-1">
+                <div className="flex justify-between font-medium">
+                  <span className="text-slate-500">Workflow ID:</span>
+                  <span className="font-mono text-slate-800">{workflowActionModal.workflow.id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Patient:</span>
+                  <span className="text-slate-800">{workflowActionModal.workflow.patient_name || 'Patient'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Intent:</span>
+                  <span className="capitalize text-slate-800">{workflowActionModal.workflow.intent}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Current Status:</span>
+                  {getWorkflowStatusBadge(workflowActionModal.workflow.status)}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">Audit Events</h4>
+                {(!workflowActionModal.workflow.events || workflowActionModal.workflow.events.length === 0) ? (
+                  <p className="text-xs text-slate-500 py-4 text-center">No audit events recorded for this workflow.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {workflowActionModal.workflow.events.map((ev) => (
+                      <div key={ev.id} className="p-2.5 rounded-md border border-slate-200 bg-white text-xs space-y-1">
+                        <div className="flex justify-between items-center">
+                          <span className="font-semibold text-slate-900">{ev.event_type}</span>
+                          <span className="text-slate-400 text-[11px]">{formatISTDateTime(ev.created_at)}</span>
+                        </div>
+                        <div className="text-slate-600">Actor: <span className="font-medium text-slate-800 capitalize">{ev.actor_type}</span></div>
+                        {ev.notes && <p className="text-slate-500 italic mt-0.5">{ev.notes}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          <div className="flex justify-end pt-2 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setWorkflowActionModal({ isOpen: false, type: 'timeline', workflow: null })}
+            >
+              Close
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* ----------------- MODAL 7: Approve Proposal Dialog ----------------- */}
+      <Dialog
+        isOpen={workflowActionModal.isOpen && workflowActionModal.type === 'approve'}
+        onClose={() => setWorkflowActionModal({ isOpen: false, type: 'approve', workflow: null })}
+        title="Approve Appointment Proposal"
+        description="Verify and commit the patient's requested appointment mutation into the clinic database."
+      >
+        <div className="space-y-4">
+          {workflowActionModal.workflow && (
+            <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-100 text-xs space-y-1 text-emerald-950">
+              <div className="font-semibold text-sm text-emerald-900 mb-1">Proposed Mutation:</div>
+              <div><span className="font-medium">Patient:</span> {workflowActionModal.workflow.patient_name || 'Patient'} ({workflowActionModal.workflow.patient_phone || 'WhatsApp'})</div>
+              <div><span className="font-medium">Operation:</span> <span className="capitalize">{workflowActionModal.workflow.intent.replace('_', ' ')}</span></div>
+              <div><span className="font-medium">Proposed Slot:</span> {workflowActionModal.workflow.proposed_changes?.formatted_display || 'As requested'}</div>
+              <div><span className="font-medium">Confirmation:</span> Confirmed by patient</div>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Approval Notes (Optional)</label>
+            <textarea
+              className="w-full p-2 border rounded-md text-sm border-slate-300 focus:outline-none"
+              rows={2}
+              placeholder="e.g. Verified with Dr. Physio One schedule"
+              value={wfActionNotes}
+              onChange={(e) => setWfActionNotes(e.target.value)}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setWorkflowActionModal({ isOpen: false, type: 'approve', workflow: null })}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={() => workflowActionModal.workflow && handleApproveWorkflow(workflowActionModal.workflow)}
+              disabled={isWfActionLoading}
+            >
+              {isWfActionLoading ? 'Committing...' : 'Confirm & Commit'}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* ----------------- MODAL 8: Reject Proposal Dialog ----------------- */}
+      <Dialog
+        isOpen={workflowActionModal.isOpen && workflowActionModal.type === 'reject'}
+        onClose={() => setWorkflowActionModal({ isOpen: false, type: 'reject', workflow: null })}
+        title="Reject Appointment Proposal"
+        description="Reject the proposed appointment change and notify the patient workflow."
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Rejection Reason *</label>
+            <Input
+              placeholder="e.g. Slot no longer available, doctor on emergency leave"
+              value={wfActionReason}
+              onChange={(e) => setWfActionReason(e.target.value)}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Internal Staff Notes</label>
+            <textarea
+              className="w-full p-2 border rounded-md text-sm border-slate-300 focus:outline-none"
+              rows={2}
+              placeholder="Optional internal rationale..."
+              value={wfActionNotes}
+              onChange={(e) => setWfActionNotes(e.target.value)}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setWorkflowActionModal({ isOpen: false, type: 'reject', workflow: null })}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => workflowActionModal.workflow && handleRejectWorkflow(workflowActionModal.workflow)}
+              disabled={isWfActionLoading || !wfActionReason.trim()}
+            >
+              {isWfActionLoading ? 'Rejecting...' : 'Reject Proposal'}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* ----------------- MODAL 9: Request Clarification Dialog ----------------- */}
+      <Dialog
+        isOpen={workflowActionModal.isOpen && workflowActionModal.type === 'clarify'}
+        onClose={() => setWorkflowActionModal({ isOpen: false, type: 'clarify', workflow: null })}
+        title="Request Patient Clarification"
+        description="Ask the patient for additional details before approving the appointment proposal."
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Question / Clarification Note *</label>
+            <textarea
+              className="w-full p-2 border rounded-md text-sm border-slate-300 focus:outline-none"
+              rows={3}
+              placeholder="e.g. Do you have a prior prescription or MRI report to bring along?"
+              value={wfActionNotes}
+              onChange={(e) => setWfActionNotes(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setWorkflowActionModal({ isOpen: false, type: 'clarify', workflow: null })}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => workflowActionModal.workflow && handleClarifyWorkflow(workflowActionModal.workflow)}
+              disabled={isWfActionLoading || !wfActionNotes.trim()}
+            >
+              {isWfActionLoading ? 'Submitting...' : 'Send Clarification Request'}
             </Button>
           </div>
         </div>

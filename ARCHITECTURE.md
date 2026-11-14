@@ -392,6 +392,86 @@ The appointment subsystem coordinates slot generation, availability checks, stat
 4. **Outbound Idempotency**:
    - Outbound dispatching is gated by `OutboundIdempotencyKey` ensuring zero duplicate patient replies.
 
+---
+
+## 11. Controlled AI Appointment Workflows Architecture (Task 10)
+
+### End-to-End Workflow Flow:
+```
+Patient WhatsApp Message
+       │
+       ▼
+Inbound Conversation Orchestrator
+       │ (Extract Intent: Booking, Availability, Reschedule, Cancel, Status, Human)
+       ▼
+Appointment Intent Extractor (Asia/Kolkata NLP/Regex Rules)
+       │
+       ▼
+Appointment Workflow Manager (AppointmentWorkflowService)
+       │ (State Machine: collecting_information -> checking_availability)
+       ▼
+Availability Engine (AppointmentService)
+       │ (Check Sunday closure, operating hours 09:00-20:00, slot durations)
+       ▼
+Slot Selection (select_appointment_slot)
+       │ (Generate cryptographically random confirmation token & summary)
+       ▼
+Awaiting Patient Confirmation
+       │ (Affirmative "YES" or "CONFIRM" recorded from patient)
+       ▼
+Policy Mode Enforcement (Mode A / Mode B / Mode C)
+       │
+       ├─► Mode A (Read Only - Mandatory Default): Blocks autonomous mutation.
+       │
+       ├─► Mode B (Staff Approval):
+       │     └─► Enqueues into Human Approval Dashboard
+       │     └─► Staff reviews immutable proposal version
+       │     └─► Staff Approves, Rejects, or Requests Clarification
+       │
+       └─► Mode C (Controlled Auto-Commit - Disabled):
+             └─► Evaluates automated safety criteria (verified patient, no takeover)
+       │
+       ▼
+Authoritative Mutation (AppointmentService)
+       │ (Revalidate availability + acquire concurrency lock)
+       │ (Transactional execution with AppointmentOperationIdempotency deduplication)
+       ▼
+Persist Result & Emit Immutable Audit Event
+       │
+       ▼
+Confirmation Response / Shadow Draft
+```
+
+### Persistent Finite State Machine (FSM):
+1. `collecting_information`: Initial state while gathering patient details, date preferences, or service type.
+2. `checking_availability`: Querying `AppointmentService` for valid clinic slots.
+3. `awaiting_slot_selection`: Available options presented to the patient; awaiting choice.
+4. `awaiting_patient_confirmation`: Specific slot selected; confirmation token issued; awaiting explicit patient "YES".
+5. `awaiting_staff_approval`: Patient confirmed; proposal submitted to staff dashboard under Mode B policy.
+6. `ready_to_commit`: All gates passed (or staff approved); ready for execution.
+7. `committing`: Transaction underway with row locking and idempotency tracking.
+8. `confirmed`: Operation successfully committed and recorded in `appointments` and `appointment_history`.
+9. `cancelled`: Workflow terminated by patient rejection, staff rejection, or superseding workflow.
+10. `expired`: Confirmation or workflow time budget exceeded.
+11. `failed`: Booking conflict or validation error during commit.
+12. `human_handoff`: Patient requested human assistance or identity verification failed.
+
+### Controlled Agent Tool Sandbox:
+- **Read-Only Tools**:
+  - `check_availability`: Queries verified open slots via `AppointmentService` (rejects Sundays and invalid hours).
+  - `get_patient_appointments`: Returns active and past appointments strictly scoped to the conversation's patient.
+  - `get_appointment_details`: Returns details of an appointment with cross-patient access control enforcement.
+- **Workflow Tools**:
+  - `start_appointment_workflow`: Initializes persistent workflow state machine.
+  - `select_appointment_slot`: Locks in proposed time, increments workflow version, and issues confirmation token.
+  - `request_appointment_confirmation`: Formats patient confirmation summary.
+  - `get_appointment_workflow_status`: Queries current FSM state and approval status.
+- **Mutating Tools (Gated)**:
+  - `create_appointment`: Gated by workflow state `ready_to_commit`, confirmation token, and policy mode.
+  - `reschedule_appointment`: Gated by workflow state and original appointment ownership.
+  - `cancel_appointment`: Gated by workflow state and explicit patient confirmation.
+
+
 
 
 

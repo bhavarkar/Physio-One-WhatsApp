@@ -36,10 +36,11 @@ Each phase corresponds to discrete tasks defined in `PRD.md`:
 - **Task 7**: Multi-Provider LLM Gateway & Agent Runtime [COMPLETED]
 - **Task 8**: pgvector Memory & Clinic Knowledge Base (RAG) [COMPLETED]
 - **Task 9**: Inbound WhatsApp AI Receptionist (Deepti) [COMPLETED]
-- **Task 10**: 3-Touch Follow-Up Engine
-- **Task 11**: Instagram Re-engagement Campaigns
-- **Task 12**: Analytics Engine & Execution Logs
-- **Task 13**: Production Docker Compose & Cloud Run Setup
-- **Task 14**: Versioned Update Manager & Safe Migrations
-- **Task 15**: E2E Testing, Security Hardening & Release Packaging
+- **Task 10**: Controlled Appointment Management Through Deepti AI Receptionist [COMPLETED]
+- **Task 11**: 3-Touch Follow-Up Engine
+- **Task 12**: Instagram Re-engagement Campaigns
+- **Task 13**: Analytics Engine & Execution Logs
+- **Task 14**: Production Docker Compose & Cloud Run Setup
+- **Task 15**: Versioned Update Manager & Safe Migrations
+- **Task 16**: E2E Testing, Security Hardening & Release Packaging
 

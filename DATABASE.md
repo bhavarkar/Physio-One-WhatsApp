@@ -148,6 +148,14 @@ alembic current
   - Creates `ai_response_drafts`: AI generated responses persisted during shadow mode or pre-dispatch for staff inbox inspection.
   - Creates `outbound_idempotency_keys`: strict once-and-only-once delivery tracking preventing duplicate outbound WhatsApp messages.
   - Total database tables expanded to 43.
+- `backend/alembic/versions/006_appointment_ai_workflows.py`:
+  - Creates `appointment_ai_workflows`: persistent workflow state machine entity tracking conversation, contact, patient, appointment, intent, workflow state, version, selected slots, collected data, proposed changes, confirmation/approval status, and expiration.
+  - Creates `appointment_workflow_events`: immutable audit trail of state transitions and human staff actions with notes and version snapshots.
+  - Creates `appointment_confirmations`: patient confirmation records with cryptographically random tokens, formatted summaries, and expiration timestamps.
+  - Creates `appointment_approval_requests`: staff approval queue records with immutable proposal summaries and versioning preventing stale execution.
+  - Creates `appointment_operation_idempotency`: transactional deduplication table guaranteeing once-and-only-once appointment mutations.
+  - Creates `appointment_workflow_settings`: singleton automation policy configuration (`policy_mode` defaulting to `mode_a_read_only`, timeouts, and thresholds).
+  - Total database tables expanded to 49.
 
 ---
 

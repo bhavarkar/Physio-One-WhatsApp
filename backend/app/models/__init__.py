@@ -45,7 +45,7 @@ from app.models.memory import (
     AIRetrievalLog,
 )
 
-# 6. Inbound AI Orchestration, Queue & Handoff
+# 7. Inbound AI Orchestration, Queue & Handoff
 from app.models.inbound import (
     InboundProcessingJob,
     AIInboundSettings,
@@ -54,7 +54,17 @@ from app.models.inbound import (
     OutboundIdempotencyKey,
 )
 
-# 7. Campaigns
+# 8. Appointment AI Workflows & Approvals (Task 10)
+from app.models.workflow import (
+    AppointmentAIWorkflow,
+    AppointmentWorkflowEvent,
+    AppointmentConfirmation,
+    AppointmentApprovalRequest,
+    AppointmentOperationIdempotency,
+    AppointmentWorkflowSettings,
+)
+
+# 9. Campaigns
 from app.models.campaign import (
     CampaignTemplate,
     Campaign,
@@ -112,6 +122,12 @@ __all__ = [
     "ConversationHandoff",
     "AIResponseDraft",
     "OutboundIdempotencyKey",
+    "AppointmentAIWorkflow",
+    "AppointmentWorkflowEvent",
+    "AppointmentConfirmation",
+    "AppointmentApprovalRequest",
+    "AppointmentOperationIdempotency",
+    "AppointmentWorkflowSettings",
     "CampaignTemplate",
     "Campaign",
     "CampaignDelivery",
