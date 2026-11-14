@@ -64,11 +64,19 @@ from app.models.workflow import (
     AppointmentWorkflowSettings,
 )
 
-# 9. Campaigns
+# 9. Campaigns (Task 12)
 from app.models.campaign import (
     CampaignTemplate,
+    CampaignMedia,
     Campaign,
+    CampaignVersion,
+    CampaignAudience,
+    CampaignRecipient,
+    CampaignApproval,
     CampaignDelivery,
+    CampaignDeliveryEvent,
+    CampaignConversionEvent,
+    LegacyWorkflowMigration,
 )
 
 # 7. Follow-ups & Automations (Task 11)
@@ -135,8 +143,16 @@ __all__ = [
     "AppointmentOperationIdempotency",
     "AppointmentWorkflowSettings",
     "CampaignTemplate",
+    "CampaignMedia",
     "Campaign",
+    "CampaignVersion",
+    "CampaignAudience",
+    "CampaignRecipient",
+    "CampaignApproval",
     "CampaignDelivery",
+    "CampaignDeliveryEvent",
+    "CampaignConversionEvent",
+    "LegacyWorkflowMigration",
     "ScheduledFollowup",
     "AutomationMessageTemplate",
     "AutomationRule",

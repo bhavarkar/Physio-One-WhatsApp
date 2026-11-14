@@ -50,7 +50,7 @@ def test_1_database_connection_and_table_count(engine):
     """1. Test connection and verify all tables (including appointment_history, ai_retrieval_logs, and scheduled automations) are created in metadata."""
     assert engine is not None
     table_names = list(Base.metadata.tables.keys())
-    assert len(table_names) == 55
+    assert len(table_names) == 63
     assert "patients" in table_names
     assert "appointments" in table_names
     assert "appointment_history" in table_names
@@ -65,6 +65,15 @@ def test_1_database_connection_and_table_count(engine):
     assert "automation_suppression_logs" in table_names
     assert "automation_settings" in table_names
     assert "automation_contact_cooldowns" in table_names
+    assert "campaigns" in table_names
+    assert "campaign_media" in table_names
+    assert "campaign_versions" in table_names
+    assert "campaign_audiences" in table_names
+    assert "campaign_recipients" in table_names
+    assert "campaign_approvals" in table_names
+    assert "campaign_delivery_events" in table_names
+    assert "campaign_conversion_events" in table_names
+    assert "legacy_workflow_migrations" in table_names
     assert "llm_usage_logs" in table_names
     assert "knowledge_bases" in table_names
     assert "knowledge_documents" in table_names

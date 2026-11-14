@@ -1689,8 +1689,269 @@ export const api = {
 
   triggerInactivityScan: () =>
     apiFetch<{ newly_scheduled_count: number }>('/api/v1/automations/scan-inactivity', { method: 'POST' }),
+
+  // Campaign & Instagram Re-engagement (Task 12)
+  getCampaignMedia: () => apiFetch<{ items: CampaignMedia[]; total: number }>('/api/v1/campaign-media'),
+  createCampaignMedia: (data: {
+    title: string;
+    media_type: string;
+    instagram_url?: string;
+    storage_path?: string;
+    caption?: string;
+    tags?: string[];
+  }) =>
+    apiFetch<CampaignMedia>('/api/v1/campaign-media', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateCampaignMedia: (id: string, data: Partial<CampaignMedia>) =>
+    apiFetch<CampaignMedia>(`/api/v1/campaign-media/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  deleteCampaignMedia: (id: string) =>
+    apiFetch<{ message: string }>(`/api/v1/campaign-media/${id}`, { method: 'DELETE' }),
+
+  getCampaigns: (params?: { campaign_type?: string; status?: string; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.campaign_type) q.set('campaign_type', params.campaign_type);
+    if (params?.status) q.set('status', params.status);
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.offset) q.set('offset', String(params.offset));
+    const qs = q.toString();
+    return apiFetch<{ items: Campaign[]; total: number }>(`/api/v1/campaigns${qs ? `?${qs}` : ''}`);
+  },
+  getCampaign: (id: string) => apiFetch<Campaign>(`/api/v1/campaigns/${id}`),
+  createCampaign: (data: Record<string, unknown>) =>
+    apiFetch<Campaign>('/api/v1/campaigns', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateCampaign: (id: string, data: Record<string, unknown>) =>
+    apiFetch<Campaign>(`/api/v1/campaigns/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  previewCampaignAudience: (id: string, persist_recipients: boolean = false) =>
+    apiFetch<CampaignAudiencePreview>(`/api/v1/campaigns/${id}/preview?persist_recipients=${persist_recipients}`, {
+      method: 'POST',
+    }),
+  approveCampaign: (id: string, decision: 'approve' | 'reject', review_notes?: string) =>
+    apiFetch<Campaign>(`/api/v1/campaigns/${id}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ decision, review_notes }),
+    }),
+  scheduleCampaign: (id: string, scheduled_for?: string) =>
+    apiFetch<Campaign>(`/api/v1/campaigns/${id}/schedule`, {
+      method: 'POST',
+      body: JSON.stringify({ scheduled_for }),
+    }),
+  pauseCampaign: (id: string) =>
+    apiFetch<Campaign>(`/api/v1/campaigns/${id}/pause`, { method: 'POST' }),
+  resumeCampaign: (id: string) =>
+    apiFetch<Campaign>(`/api/v1/campaigns/${id}/resume`, { method: 'POST' }),
+  cancelCampaign: (id: string) =>
+    apiFetch<Campaign>(`/api/v1/campaigns/${id}/cancel`, { method: 'POST' }),
+  getCampaignRecipients: (id: string, params?: { status?: string; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.status) q.set('status', params.status);
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.offset) q.set('offset', String(params.offset));
+    const qs = q.toString();
+    return apiFetch<{ items: CampaignRecipient[]; total: number }>(`/api/v1/campaigns/${id}/recipients${qs ? `?${qs}` : ''}`);
+  },
+  getCampaignAnalytics: (id: string) => apiFetch<CampaignAnalytics>(`/api/v1/campaigns/${id}/analytics`),
+  importCampaignCsv: (csv_text: string) =>
+    apiFetch<CampaignImportReport>('/api/v1/campaigns/import-csv', {
+      method: 'POST',
+      body: JSON.stringify({ csv_text }),
+    }),
+  getLegacyMigrationStatus: () => apiFetch<LegacyMigrationStatus>('/api/v1/legacy-migration/status'),
+  runLegacyDryRun: () => apiFetch<LegacyMigrationDryRun>('/api/v1/legacy-migration/dry-run', { method: 'POST' }),
+  setLegacyCutoverState: (data: { cutover_state: string; notes?: string }) =>
+    apiFetch<LegacyMigrationStatus>('/api/v1/legacy-migration/cutover', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  triggerReengagementCycle: (limit: number = 25) =>
+    apiFetch<{ scanned_campaigns: number; dispatched_count: number; suppressed_count: number; failed_count: number }>(
+      `/api/v1/campaigns/worker/trigger?limit=${limit}`,
+      { method: 'POST' }
+    ),
 };
 
+export interface CampaignMedia {
+  id: string;
+  title: string;
+  media_type: string;
+  instagram_url?: string | null;
+  storage_path?: string | null;
+  caption?: string | null;
+  tags?: string[] | null;
+  is_active: boolean;
+  file_size?: number | null;
+  mime_type?: string | null;
+  created_by_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CampaignVersion {
+  id: string;
+  campaign_id: string;
+  version_number: number;
+  title: string;
+  target_audience_rules: Record<string, unknown>;
+  template_name?: string | null;
+  custom_message_body?: string | null;
+  media_id?: string | null;
+  rate_limit_per_minute: number;
+  rate_limit_per_hour: number;
+  batch_size: number;
+  cooldown_days: number;
+  provider: string;
+  execution_window_start: string;
+  execution_window_end: string;
+  created_by_id?: string | null;
+  change_summary?: string | null;
+  created_at: string;
+}
+
+export interface CampaignApproval {
+  id: string;
+  campaign_id: string;
+  version_number: number;
+  reviewed_by_id: string;
+  decision: 'approved' | 'rejected' | 'invalidated';
+  review_notes?: string | null;
+  created_at: string;
+}
+
+export interface Campaign {
+  id: string;
+  title: string;
+  description?: string | null;
+  campaign_type: 'instagram_reengagement' | 'patient_education' | 'seasonal_broadcast' | 'custom_broadcast';
+  status: 'draft' | 'audience_prepared' | 'preview_ready' | 'awaiting_approval' | 'approved' | 'scheduled' | 'running' | 'paused' | 'completed' | 'cancelled';
+  provider: 'meta' | 'ycloud';
+  is_approved: boolean;
+  approved_by_id?: string | null;
+  approved_at?: string | null;
+  approved_version?: number | null;
+  approval_notes?: string | null;
+  template_name?: string | null;
+  template_id?: string | null;
+  custom_message_body?: string | null;
+  media_id?: string | null;
+  target_audience_rules: Record<string, unknown>;
+  scheduled_for?: string | null;
+  execution_window_start: string;
+  execution_window_end: string;
+  rate_limit_per_minute: number;
+  rate_limit_per_hour: number;
+  batch_size: number;
+  cooldown_days: number;
+  total_recipients: number;
+  total_sent: number;
+  total_delivered: number;
+  total_read: number;
+  total_converted: number;
+  total_suppressed: number;
+  total_failed: number;
+  current_version: number;
+  created_by_id?: string | null;
+  error_message?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  media?: CampaignMedia | null;
+  approvals?: CampaignApproval[];
+}
+
+export interface CampaignRecipient {
+  id: string;
+  campaign_id: string;
+  contact_id: string;
+  phone_e164: string;
+  contact_name?: string | null;
+  status: 'queued' | 'sending' | 'sent' | 'delivered' | 'read' | 'failed' | 'suppressed' | 'converted';
+  suppression_reason?: string | null;
+  sent_at?: string | null;
+  delivered_at?: string | null;
+  read_at?: string | null;
+  converted_at?: string | null;
+  attempts: number;
+  error_message?: string | null;
+}
+
+export interface CampaignAudiencePreview {
+  campaign_id: string;
+  total_evaluated: number;
+  eligible_count: number;
+  suppressed_count: number;
+  suppression_breakdown: Record<string, number>;
+  sample_eligible_recipients: Array<{
+    contact_id: string;
+    wa_id: string;
+    name?: string | null;
+    last_active_at?: string | null;
+  }>;
+  sample_rendered_message?: string | null;
+}
+
+export interface CampaignImportReport {
+  total_rows: number;
+  accepted_count: number;
+  rejected_count: number;
+  duplicate_count: number;
+  created_contacts_count: number;
+  rejections: Array<{ row: number; phone?: string; reason: string }>;
+}
+
+export interface CampaignAnalytics {
+  campaign_id: string;
+  title: string;
+  campaign_type: string;
+  status: string;
+  total_recipients: number;
+  total_sent: number;
+  total_delivered: number;
+  total_read: number;
+  total_converted: number;
+  total_suppressed: number;
+  total_failed: number;
+  delivery_rate_pct: number;
+  read_rate_pct: number;
+  conversion_rate_pct: number;
+  failure_rate_pct: number;
+  attribution_window_hours: number;
+  suppression_breakdown: Record<string, number>;
+}
+
+export interface LegacyMigrationStatus {
+  cutover_state: 'legacy_active' | 'shadow_comparison' | 'migration_ready' | 'new_active' | 'rolled_back';
+  legacy_system_name: string;
+  last_dry_run_at?: string | null;
+  dry_run_discrepancy_count: number;
+  is_live_dispatch_blocked: boolean;
+  notes?: string | null;
+}
+
+export interface LegacyMigrationDryRun {
+  total_evaluated: number;
+  legacy_predicted_count: number;
+  new_engine_eligible_count: number;
+  discrepancy_count: number;
+  suppression_summary: Record<string, number>;
+  discrepancies: Array<{
+    contact_id: string;
+    wa_id: string;
+    legacy_status: string;
+    new_engine_status: string;
+    reason: string;
+  }>;
+}
 
 export const apiClient = api;
 

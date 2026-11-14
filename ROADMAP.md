@@ -38,7 +38,7 @@ Each phase corresponds to discrete tasks defined in `PRD.md`:
 - **Task 9**: Inbound WhatsApp AI Receptionist (Deepti) [COMPLETED]
 - **Task 10**: Controlled Appointment Management Through Deepti AI Receptionist [COMPLETED]
 - **Task 11**: Durable Scheduling, Appointment Reminders & Scheduled Follow-up Automation [COMPLETED]
-- **Task 12**: Instagram Re-engagement Campaigns
+- **Task 12**: Instagram Re-engagement, YCloud Migration & Controlled WhatsApp Campaigns [COMPLETED]
 - **Task 13**: Analytics Engine & Execution Logs
 - **Task 14**: Production Docker Compose & Cloud Run Setup
 - **Task 15**: Versioned Update Manager & Safe Migrations

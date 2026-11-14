@@ -10,6 +10,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0-draft] - 2026-11-14
 
 ### Added
+- **Task 12: Instagram Re-engagement, YCloud Migration & Controlled WhatsApp Campaigns**:
+  - Authored Alembic migration `008_campaigns_instagram_reengagement.py` establishing 8 new database tables and altering `campaigns` with full SQLite and PostgreSQL cross-dialect support:
+    - `campaign_media`: Approved Instagram reel and multimedia library with URL validation, staff ownership, caption, tags, and active status.
+    - `campaign_versions`: Immutable snapshot history of campaign rules, media, copy, rate limits, and batch parameters.
+    - `campaign_audiences`: Audience evaluation cache linking campaigns to evaluated contact segments.
+    - `campaign_recipients`: Individual recipient tracking store recording E.164 phone, lifecycle delivery status, suppression reasons, attempts, and timestamps.
+    - `campaign_approvals`: Immutable multi-version approval audit log capturing reviewer decision, snapshot version, and mandatory review notes.
+    - `campaign_delivery_events`: Chronological delivery event telemetry from Meta Cloud API and YCloud webhooks.
+    - `campaign_conversion_events`: 72-hour conversion attribution linking delivered campaign messages to confirmed clinic appointments.
+    - `legacy_workflow_migrations`: Cutover state machine tracking migration status (`legacy_active`, `shadow_comparison`, `migration_ready`, `new_active`, `rolled_back`), dry-run discrepancies, and mutual exclusion invariants.
+    - Alters `campaigns`: Adds `campaign_type`, `description`, `current_version`, `is_approved`, `approved_by_id`, `approved_at`, `approved_version`, `approval_notes`, `template_name`, `template_id`, `custom_message_body`, `media_id`, rate limits, batch size, cooldown days, delivery aggregates, and error message.
+    - Total database tables expanded to 63.
+  - Built `CampaignService` (`backend/app/services/campaign_service.py`):
+    - Media library management with Instagram URL validation and preview generation.
+    - Deterministic audience evaluation enforcing the 24–48h interaction recency window, marketing consent, STOP opt-out suppression, and exclusion of already-booked patients.
+    - Automated 30-minute re-engagement cycle enforcing 09:00–21:00 IST business hours with next-day rollover.
+    - CSV contact list importer with spreadsheet formula injection protection (sanitizing `=`, `+`, `-`, `@`), E.164 normalization, and deduplication.
+    - Immutable multi-version approval queue with automatic invalidation upon campaign modifications.
+    - YCloud/n8n migration cutover state machine with mutual exclusion invariant (blocking new engine sends in legacy/shadow modes) and dry-run comparison engine.
+    - Delivery analytics and 72-hour conversion attribution tracking for confirmed appointments.
+  - Authored FastAPI REST API router (`backend/app/api/v1/campaigns.py`):
+    - Endpoints for campaign CRUD, audience preview, Owner/Admin approval/rejection, scheduling, pause/resume/cancel, media library, CSV contact import, legacy migration cutover, dry-run comparisons, and re-engagement worker execution.
+  - Authored comprehensive backend test suite (`backend/tests/test_campaigns_reengagement.py`):
+    - 30 tests covering all specified functional scenarios, edge cases, safety gates, and failure modes. Total backend tests passing: 160/160.
+  - Built Next.js Campaign Dashboard UI (`frontend/src/app/(dashboard)/campaigns/page.tsx`):
+    - Tabbed interface featuring Campaigns List & Builder, Approval Queue, Instagram Reel Library, Legacy YCloud Cutover Manager, and Contact CSV Importer.
+    - Audience preview modal with suppression breakdown, sample rendered message, and sample recipient lists.
+    - Dedicated analytics modal displaying delivery %, read %, conversion % (72h window), failure %, and recipient logs.
+    - Multi-version approval dialog with mandatory review notes for rejections.
+  - Authored frontend test suite (`frontend/src/app/(dashboard)/campaigns/campaigns.test.tsx`):
+    - 8 Jest tests covering rendering, search/filters, campaign builder, audience preview, approval workflow, media library, legacy dry-run, and CSV imports. Total frontend tests passing: 53/53 across 12 test suites.
 - **Task 11: Durable Scheduling, Appointment Reminders, and Patient Follow-up Automation**:
   - Authored Alembic migration `007_scheduled_automation.py` establishing 6 new database tables and altering `automation_rules` with full SQLite and PostgreSQL cross-dialect support:
     - `automation_message_templates`: Pre-approved and draft WhatsApp templates with provider, category (UTILITY/MARKETING), approval status, extracted variables, and versioning.

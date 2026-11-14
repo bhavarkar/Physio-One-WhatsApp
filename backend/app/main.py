@@ -24,6 +24,7 @@ from app.api.v1 import (
     ai_inbound,
     appointment_workflows,
     automations,
+    campaigns,
 )
 from app.services.agent_service import AgentService
 from app.services.workflow_service import AppointmentWorkflowService
@@ -129,6 +130,7 @@ api_v1_router.include_router(conversations.router)
 api_v1_router.include_router(ai_inbound.router)
 api_v1_router.include_router(appointment_workflows.router)
 api_v1_router.include_router(automations.router)
+api_v1_router.include_router(campaigns.router)
 
 app.include_router(api_v1_router)
 

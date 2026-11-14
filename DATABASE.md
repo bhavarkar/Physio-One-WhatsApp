@@ -165,6 +165,17 @@ alembic current
   - Creates `automation_contact_cooldowns`: per-contact cooldown tracking preventing duplicate sends within configured cooldown windows (default 24h).
   - Alters `automation_rules`: adds delay offsets, business hours windows, permitted days, timezone, provider, retry policy, and eligibility filters.
   - Total database tables expanded to 55.
+- `backend/alembic/versions/008_campaigns_instagram_reengagement.py`:
+  - Creates `campaign_media`: approved Instagram reel and multimedia library with URL validation, staff ownership, caption, tags, and active status.
+  - Creates `campaign_versions`: immutable snapshot history of campaign rules, media, copy, rate limits, and batch parameters.
+  - Creates `campaign_audiences`: audience evaluation cache linking campaigns to evaluated contact segments.
+  - Creates `campaign_recipients`: individual recipient tracking store recording E.164 phone, lifecycle delivery status, suppression reasons, attempts, and timestamps.
+  - Creates `campaign_approvals`: immutable multi-version approval audit log capturing reviewer decision, snapshot version, and mandatory review notes.
+  - Creates `campaign_delivery_events`: chronological delivery event telemetry from Meta Cloud API and YCloud webhooks.
+  - Creates `campaign_conversion_events`: 72-hour conversion attribution linking delivered campaign messages to confirmed clinic appointments.
+  - Creates `legacy_workflow_migrations`: cutover state machine tracking migration status (`legacy_active`, `shadow_comparison`, `migration_ready`, `new_active`, `rolled_back`), dry-run discrepancies, and mutual exclusion invariants.
+  - Alters `campaigns`: adds `campaign_type`, `description`, `current_version`, `is_approved`, `approved_by_id`, `approved_at`, `approved_version`, `approval_notes`, `template_name`, `template_id`, `custom_message_body`, `media_id`, rate limits, batch size, cooldown days, delivery aggregates, and error message.
+  - Total database tables expanded to 63.
 
 ---
 

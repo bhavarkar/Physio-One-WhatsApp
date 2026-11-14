@@ -696,6 +696,7 @@ async def test_21_service_window_restrictions(async_session, clinic_contact):
         status="scheduled",
         idempotency_key=f"window_{uuid.uuid4().hex[:8]}",
         template_id=None,  # Free-form
+        payload={"test_mode": True},
     )
     async_session.add(job)
     await async_session.commit()

@@ -54,6 +54,22 @@ class WhatsAppContact(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     messages: Mapped[List["WhatsAppMessage"]] = relationship("WhatsAppMessage", back_populates="contact")
     patient: Mapped[Optional["Patient"]] = relationship("Patient", back_populates="contact", uselist=False)
 
+    @property
+    def phone_number(self) -> str:
+        """Formatted phone number helper."""
+        if not self.wa_id:
+            return ""
+        return f"+{self.wa_id}" if not self.wa_id.startswith("+") else self.wa_id
+
+    @property
+    def opted_out_promotions(self) -> bool:
+        """Alias for promotional/marketing opt-out."""
+        return self.opted_out_marketing
+
+    @opted_out_promotions.setter
+    def opted_out_promotions(self, value: bool) -> None:
+        self.opted_out_marketing = value
+
 
 class Conversation(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """Active or historical conversation thread with a contact."""

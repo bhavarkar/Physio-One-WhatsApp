@@ -160,6 +160,28 @@ The platform handles patient communications, appointment schedules, and contact 
 - **Zero Real WhatsApp Outbound During Testing**:
   - Synthetic test mode (`payload["test_mode"] = True`) simulates full safety verification and state transitions without live WhatsApp API dispatch or external network egress.
 
+### K. Controlled Campaigns, Instagram Re-engagement & Migration Security (Task 12)
+- **Mandatory Default Draft Status & Double Approval**:
+  - All campaigns default strictly to `draft` or `audience_prepared` status upon creation.
+  - Outbound scheduling is strictly prevented until explicit authorization is granted by an authorized `Owner` or `Admin` role.
+- **Approval Invalidation Invariant**:
+  - Any mutation to campaign rules, copy, media attachments, or rate limits automatically invalidates prior approvals, increments the snapshot version counter (`current_version`), and reverts campaign status to `draft`.
+  - Immutable audit logs in `campaign_approvals` track decision (`approved`, `rejected`, `invalidated`), reviewer ID, timestamp, and review notes.
+- **Spreadsheet Formula Injection Sanitization (CSV)**:
+  - During contact CSV ingestion, all cell values starting with formula execution prefixes (`=`, `+`, `-`, `@`) are automatically escaped with a leading single quote (`'`).
+  - Phone numbers are validated against E.164 requirements and sanitized, strictly isolating raw spreadsheet strings from export views.
+- **Deterministic Opt-Out & Consent Suppression**:
+  - Contacts with `opted_out_all = True` or `opted_out_marketing = True` are strictly suppressed at the audience evaluation gate and re-checked immediately prior to dispatch.
+  - Patients without explicit `marketing_promotions` consent are excluded by default for all promotional and re-engagement campaigns.
+  - Patients with active confirmed upcoming appointments are excluded to prevent redundant re-engagement spam.
+- **Legacy Migration Mutual Exclusion**:
+  - To prevent dual-sending between legacy n8n/YCloud workflows and the new engine, the system enforces mutual exclusion: while in `legacy_active` or `shadow_comparison` cutover states, outbound campaign dispatches in the new engine are completely blocked.
+- **Business Hours Window (09:00–21:00 IST)**:
+  - Instagram re-engagement campaigns are strictly constrained to 09:00–21:00 Asia/Kolkata daily, deferring all out-of-window contacts to 09:00 IST the following morning.
+- **Cross-Patient Data Isolation**:
+  - Campaign recipient lists and analytics are scoped strictly to the Physio One organization, preventing cross-tenant or cross-contact data leakage.
+
+
 ---
 
 ## 3. Vulnerability Reporting & Patch Policy

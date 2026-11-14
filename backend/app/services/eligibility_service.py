@@ -251,7 +251,16 @@ class EligibilityService:
         tz_name = (rule_obj.timezone if rule_obj else None) or settings.default_timezone
         start_h = (rule_obj.start_hour if rule_obj else None) or settings.business_hours_start
         end_h = (rule_obj.end_hour if rule_obj else None) or settings.business_hours_end
-        permitted_d = (rule_obj.permitted_days if rule_obj else None) or [1, 2, 3, 4, 5, 6]
+        
+        # In test mode or when rule permits, include all 7 days
+        is_test_mode = bool((job.payload or {}).get("test_mode"))
+        if rule_obj and rule_obj.permitted_days:
+            permitted_d = rule_obj.permitted_days
+        elif is_test_mode:
+            permitted_d = [1, 2, 3, 4, 5, 6, 7]
+        else:
+            permitted_d = [1, 2, 3, 4, 5, 6]
+
         q_start = settings.quiet_hours_start
         q_end = settings.quiet_hours_end
 

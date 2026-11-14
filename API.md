@@ -257,6 +257,36 @@
 | `POST` | `/api/v1/automations/process-due` | Execute worker cycle: acquire row lease (`SKIP LOCKED`) and dispatch | `Operator`+ / Worker Token |
 | `POST` | `/api/v1/automations/scan-inactivity`| Trigger 15-minute conversation inactivity evaluation scan | `Operator`+ / Worker Token |
 
+---
+
+### P. Campaigns, Instagram Re-engagement & Legacy Migration (Task 12)
+| Method | Endpoint | Description | Role Required |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/campaign-media` | List approved Instagram reels and promotional media assets | `Viewer`+ |
+| `POST` | `/api/v1/campaign-media` | Add approved Instagram reel URL or media asset with caption and tags | `Operator`+ |
+| `GET` | `/api/v1/campaign-media/{id}` | Retrieve specific media details, URL, tags, and ownership | `Viewer`+ |
+| `PATCH` | `/api/v1/campaign-media/{id}` | Update media title, caption, tags, or active status | `Operator`+ |
+| `DELETE` | `/api/v1/campaign-media/{id}` | Deactivate or archive media asset | `Operator`+ |
+| `GET` | `/api/v1/campaigns` | List broadcast and re-engagement campaigns with type/status filters | `Viewer`+ |
+| `POST` | `/api/v1/campaigns` | Create a new campaign (defaults to `draft` status) | `Operator`+ |
+| `GET` | `/api/v1/campaigns/{id}` | Retrieve full campaign details, version snapshot, and media | `Viewer`+ |
+| `PATCH` | `/api/v1/campaigns/{id}` | Update campaign (automatically invalidates prior approvals) | `Operator`+ |
+| `DELETE` | `/api/v1/campaigns/{id}` | Delete a draft campaign | `Admin`+ |
+| `POST` | `/api/v1/campaigns/{id}/preview` | Evaluate deterministic audience, suppression breakdown, sample copy | `Viewer`+ |
+| `POST` | `/api/v1/campaigns/{id}/approve` | Owner/Admin approval or rejection with version snapshot and audit note | `Admin`+ / `Owner` |
+| `POST` | `/api/v1/campaigns/{id}/schedule` | Schedule an approved campaign for 09:00–21:00 IST automated sending | `Operator`+ |
+| `POST` | `/api/v1/campaigns/{id}/pause` | Pause an active or scheduled campaign | `Operator`+ |
+| `POST` | `/api/v1/campaigns/{id}/resume` | Resume a paused campaign | `Operator`+ |
+| `POST` | `/api/v1/campaigns/{id}/cancel` | Terminate and cancel pending campaign jobs | `Operator`+ |
+| `GET` | `/api/v1/campaigns/{id}/recipients` | List campaign recipient records, delivery status, and errors | `Viewer`+ |
+| `GET` | `/api/v1/campaigns/{id}/analytics` | Aggregate delivery, read, failure, and 72-hour conversion rates | `Viewer`+ |
+| `POST` | `/api/v1/campaigns/import-csv` | Import CSV contact list with formula sanitization & E.164 normalization | `Operator`+ |
+| `GET` | `/api/v1/legacy-migration/status` | Retrieve current cutover state machine status and mutual exclusion | `Viewer`+ |
+| `POST` | `/api/v1/legacy-migration/cutover` | Transition cutover state (`legacy_active`, `shadow`, `new_active`) | `Admin`+ / `Owner` |
+| `POST` | `/api/v1/legacy-migration/dry-run` | Run audience simulation comparing legacy n8n targeting with new engine | `Viewer`+ |
+| `POST` | `/api/v1/campaigns/worker/trigger` | Trigger 30-minute re-engagement cycle (enforces 09:00–21:00 IST) | `Operator`+ / Worker |
+
+
 
 
 

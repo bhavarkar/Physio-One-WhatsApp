@@ -552,6 +552,85 @@ flowchart TD
 5. **Staff Dashboard (`frontend/src/app/(dashboard)/automations/page.tsx`)**:
    - Overview metrics, kill-switch banner with confirmation modal, rule activation controls, scheduled job monitoring, job cancellation/retry actions, template preview, execution/suppression log inspection, and manual worker diagnostics.
 
+---
+
+## 13. Task 12 Architecture: Instagram Re-engagement, YCloud Migration & Controlled WhatsApp Campaigns
+
+### Architectural Overview
+Task 12 introduces an enterprise-grade campaign and re-engagement architecture to automate Instagram reel follow-ups, replace legacy n8n/YCloud workflows safely, and provide staff-controlled WhatsApp broadcast management with strict multi-layer approval, formula injection security, and conversion attribution.
+
+```mermaid
+flowchart TD
+    subgraph TriggerLayer["Trigger & Ingestion"]
+        ReelLib["Approved Instagram Reel Library\n(campaign_media)"]
+        CSVImport["Contact List CSV Importer\n(Formula Sanitized & E.164 Normalization)"]
+        Scan30m["30-Minute Instagram Scanner\n(09:00 - 21:00 IST Window)"]
+    end
+
+    subgraph GovernanceLayer["Campaign Governance & Approval"]
+        CampaignDef["Campaign Builder & Version Snapshot\n(campaign_versions)"]
+        AudienceEval["Deterministic Audience Evaluator\n(24-48h Interaction Recency & Gates)"]
+        ApprovalQueue{"Owner / Admin Approval\n(campaign_approvals)"}
+        CutoverGuard{"Migration Mutual Exclusion\n(legacy_workflow_migrations)"}
+    end
+
+    subgraph DispatchExecution["Durable Dispatch Pipeline"]
+        RecipQueue[("Campaign Recipients Store\n(campaign_recipients)")]
+        RateLimiter["Adaptive Rate Limiter & Throttler\n(30/min, 500/hr, batch size 25)"]
+        OutboundDispatcher["WhatsApp Outbound Dispatcher\n(Meta Cloud API / YCloud)"]
+    end
+
+    subgraph AnalyticsAndAttribution["Analytics & Conversion Tracking"]
+        DeliveryEvents[("Delivery Tracking\n(campaign_delivery_events)")]
+        ConversionEvents[("72h Conversion Attribution\n(campaign_conversion_events)")]
+    end
+
+    ReelLib --> CampaignDef
+    CSVImport --> AudienceEval
+    Scan30m --> CampaignDef
+    CampaignDef --> AudienceEval
+    AudienceEval --> ApprovalQueue
+    ApprovalQueue -->|Approved| CutoverGuard
+    CutoverGuard -->|Cutover Validated| RecipQueue
+    RecipQueue --> RateLimiter
+    RateLimiter --> OutboundDispatcher
+    OutboundDispatcher --> DeliveryEvents
+    DeliveryEvents --> ConversionEvents
+```
+
+### Key Subsystems:
+1. **Instagram Reel & Media Library (`campaign_media`)**:
+   - Curated repository of clinic-approved Instagram reels and multimedia assets.
+   - Validates URL syntax (`instagram.com/reel/` or `instagram.com/p/`), file metadata, and staff ownership.
+   - Decoupled from core messaging: reels can be attached to campaigns or referenced in templates without scraping Instagram.
+2. **Deterministic Audience Evaluation & 30-Minute Scanner (`CampaignService`)**:
+   - Evaluates contacts against the legacy Physio One recency specification (qualifying interaction between 24 and 48 hours ago).
+   - Enforces the 09:00–21:00 IST daily permitted sending window with automatic rollover to 09:00 IST the following day.
+   - 6-Layer Exclusion Gate:
+     - `missing_marketing_consent`: Suppresses contacts lacking explicit opt-in.
+     - `contact_opted_out_all` / `contact_opted_out_marketing`: Strictly suppresses all STOP or opt-out recipients.
+     - `appointment_already_booked`: Excludes patients who already have active confirmed upcoming appointments.
+     - `human_takeover_active`: Suppresses contacts currently engaged in an active human takeover conversation.
+     - `already_contacted_in_campaign`: Prevents duplicate sends within the campaign.
+     - `contact_cooldown_active`: Enforces per-contact campaign cooldown (default 7 days).
+3. **Immutable Multi-Version Approval Queue (`campaign_versions`, `campaign_approvals`)**:
+   - All campaigns default to `draft` or `audience_prepared` status.
+   - Any modification to campaign copy, target rules, media attachment, or rate limits automatically invalidates existing approvals, increments `current_version`, and resets status to `draft`.
+   - Immutable audit log of approvals and rejections recorded with reviewer ID, timestamp, snapshot version, and mandatory review notes for rejections. Only Owner and Admin roles hold approval authority.
+4. **CSV Import with Formula Injection Protection**:
+   - Sanitizes untrusted CSV inputs: values beginning with spreadsheet formula triggers (`=`, `+`, `-`, `@`) are escaped with a leading quote `'` to prevent CSV formula execution attacks upon export.
+   - Normalizes all phone numbers to E.164 standard (defaulting 10-digit Indian numbers to `+91`).
+   - Automatically dedupes rows within the CSV and against existing contacts.
+5. **YCloud / n8n Migration State Machine (`legacy_workflow_migrations`)**:
+   - Cutover States: `legacy_active` → `shadow_comparison` → `migration_ready` → `new_active` → `rolled_back`.
+   - Mutual Exclusion Invariant: When in `legacy_active` or `shadow_comparison`, live outbound campaign dispatches in the new engine are strictly blocked.
+   - Automated Dry-Run Engine: Simulates audience selection against active contacts, compares legacy predictions with new engine gates, and highlights targeting discrepancies.
+6. **Delivery Analytics & 72-Hour Conversion Attribution**:
+   - Tracks granular delivery events (`queued`, `sending`, `sent`, `delivered`, `read`, `failed`, `unknown_delivery`).
+   - Computes delivery rate, read rate, failure rate, and conversion rate.
+   - Automatically attributes clinic appointments confirmed within a 72-hour window following campaign delivery to the campaign record.
+
+
 
 
 
