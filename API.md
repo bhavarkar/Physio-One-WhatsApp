@@ -254,8 +254,9 @@
 | `GET` | `/api/v1/automations/executions` | List chronological execution logs and state transitions | `Viewer`+ |
 | `GET` | `/api/v1/automations/suppressions` | List safety gate suppression logs with reason codes and details | `Viewer`+ |
 | `POST` | `/api/v1/automations/test` | Test template rendering and run complete 12-layer safety gate preview | `Operator`+ |
-| `POST` | `/api/v1/automations/process-due` | Execute worker cycle: acquire row lease (`SKIP LOCKED`) and dispatch | `Operator`+ / Worker Token |
-| `POST` | `/api/v1/automations/scan-inactivity`| Trigger 15-minute conversation inactivity evaluation scan | `Operator`+ / Worker Token |
+| `POST` | `/api/v1/automations/process-due` | Execute worker cycle: acquire row lease (`SKIP LOCKED`) and dispatch | Google OIDC / `X-Worker-Token` / `Admin`+ |
+| `POST` | `/api/v1/automations/scan-inactivity`| Trigger 15-minute conversation inactivity evaluation scan | Google OIDC / `X-Worker-Token` / `Admin`+ |
+| `POST` | `/api/v1/ai-inbound/process-due` | Trigger execution of due debounced inbound jobs | Google OIDC / `X-Worker-Token` / `Admin`+ |
 
 ---
 
@@ -284,7 +285,7 @@
 | `GET` | `/api/v1/legacy-migration/status` | Retrieve current cutover state machine status and mutual exclusion | `Viewer`+ |
 | `POST` | `/api/v1/legacy-migration/cutover` | Transition cutover state (`legacy_active`, `shadow`, `new_active`) | `Admin`+ / `Owner` |
 | `POST` | `/api/v1/legacy-migration/dry-run` | Run audience simulation comparing legacy n8n targeting with new engine | `Viewer`+ |
-| `POST` | `/api/v1/campaigns/worker/trigger` | Trigger 30-minute re-engagement cycle (enforces 09:00–21:00 IST) | `Operator`+ / Worker |
+| `POST` | `/api/v1/campaigns/worker/run` | Trigger 30-minute re-engagement cycle (enforces 09:00–21:00 IST) | Google OIDC / `X-Worker-Token` / `Admin`+ |
 
 
 

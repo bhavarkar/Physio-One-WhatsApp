@@ -38,6 +38,7 @@ The platform runs as a coordinated suite of isolated Docker containers managed v
 | `redis` | Broker, Debounce & Cache | `redis:7-alpine` | `6379:6379` | `redis-cli ping` |
 | `migration` | One-shot Alembic runner | `docker/Dockerfile.api` | None | Service completes successfully (`alembic upgrade head`) |
 | `api` | Inbound Ingress & REST API | `docker/Dockerfile.api` | `8000:8000` | Process / health check |
+| `worker` | Background Automation & Campaign Daemon | `docker/Dockerfile.api` | None | Continuous cycle via `python -m app.workers.runner` |
 | `frontend` | Next.js 14 Web Console | `docker/Dockerfile.frontend` | `3000:3000` | HTTP GET `/api/v1/auth/setup-status` proxy check |
 
 ---

@@ -48,6 +48,7 @@ from app.schemas.campaign import (
 )
 from app.services.campaign_service import CampaignService
 from app.api.deps import get_current_user, require_role
+from app.core.worker_auth import require_worker_auth
 
 router = APIRouter(tags=["campaigns"])
 
@@ -427,22 +428,12 @@ async def set_legacy_cutover_state(
 @router.post("/campaigns/worker/run")
 async def trigger_reengagement_cycle(
     limit: int = Query(25, ge=1, le=100),
-    x_worker_token: Optional[str] = Header(None),
+    worker_auth: dict = Depends(require_worker_auth),
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
 ):
-    """Execute one 30-minute re-engagement campaign dispatch cycle."""
-    authorized = False
-    if current_user and current_user.role.name in ["owner", "admin", "operator"]:
-        authorized = True
-    elif x_worker_token and x_worker_token == app_settings.AUTOMATION_WORKER_SECRET_TOKEN:
-        authorized = True
-
-    if not authorized:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unauthorized service caller. Valid worker token or admin session required.",
-        )
-
+    """Execute one 30-minute re-engagement campaign dispatch cycle.
+    
+    Protected via verified Google OIDC token, worker token, or logged-in Owner/Admin session.
+    """
     result = await CampaignService.run_reengagement_cycle(db, limit=limit)
     return result

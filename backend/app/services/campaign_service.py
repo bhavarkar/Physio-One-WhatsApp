@@ -846,9 +846,10 @@ class CampaignService:
                 error_err = None
 
                 try:
+                    target_phone = getattr(contact, "phone_number", None) or getattr(contact, "wa_id", "")
                     if mock_dispatcher:
                         res = await mock_dispatcher(
-                            to_phone=contact.phone_number,
+                            to_phone=target_phone,
                             message=recip.rendered_message or "Hello from Physio One",
                             campaign_id=camp.id,
                         )

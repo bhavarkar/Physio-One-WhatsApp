@@ -78,6 +78,12 @@ class Settings(BaseSettings):
     AUTOMATION_WORKER_INTERVAL_SECONDS: int = 60
     AUTOMATION_WORKER_SECRET_TOKEN: str = "default-automation-worker-secret-token"
 
+    # Cloud Run & Cloud Tasks Worker Security (Task 13)
+    CLOUD_RUN_SERVICE_URL: Optional[str] = None
+    WORKER_SERVICE_ACCOUNT_EMAIL: Optional[str] = None
+    OIDC_AUDIENCE: Optional[str] = None
+    REQUIRE_OIDC_IN_PRODUCTION: bool = False
+
 
 settings = Settings()
 

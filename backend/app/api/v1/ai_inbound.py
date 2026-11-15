@@ -14,6 +14,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
+from app.core.worker_auth import require_worker_auth
 from app.api.deps import require_role, get_current_user
 from app.core.rbac import ROLE_OWNER, ROLE_ADMIN, ROLE_OPERATOR, ROLE_VIEWER
 from app.models.user import User
@@ -148,10 +149,13 @@ async def update_inbound_settings(
 @router.post("/process-due")
 async def trigger_process_due_jobs(
     limit: int = Query(10, ge=1, le=50),
-    current_user: User = Depends(require_role(ROLE_OWNER, ROLE_ADMIN, ROLE_OPERATOR)),
+    worker_auth: dict = Depends(require_worker_auth),
     db: AsyncSession = Depends(get_db),
 ):
-    """Trigger execution of due debounced inbound jobs."""
+    """Trigger execution of due debounced inbound jobs.
+    
+    Protected via verified Google OIDC token, worker token, or logged-in Owner/Admin session.
+    """
     jobs = await InboundQueueService.fetch_and_lock_due_jobs(db, limit=limit)
     results = []
     for job in jobs:

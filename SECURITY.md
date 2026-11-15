@@ -182,6 +182,21 @@ The platform handles patient communications, appointment schedules, and contact 
   - Campaign recipient lists and analytics are scoped strictly to the Physio One organization, preventing cross-tenant or cross-contact data leakage.
 
 
+### L. Production Security Hardening & Multi-Tier Worker Authentication (Task 13)
+- **Multi-Tier Privilege Boundary for Internal Worker Routes**:
+  - The privileged endpoints `/api/v1/automations/process-due`, `/api/v1/automations/scan-inactivity`, `/api/v1/campaigns/worker/run`, and `/api/v1/ai-inbound/process-due` are protected by `require_worker_auth` (`backend/app/core/worker_auth.py`).
+  - **Google OIDC Token Validation**: Validates Google Cloud Tasks / Cloud Scheduler identity tokens (`accounts.google.com`), checking audience, expiration (with 30s clock skew window), and service account email (`WORKER_SERVICE_ACCOUNT_EMAIL`).
+  - **Timing Attack Mitigation (HMAC)**: Validates `X-Worker-Token` against `AUTOMATION_WORKER_SECRET_TOKEN` using `hmac.compare_digest` in constant time, eliminating timing-based secret discovery.
+  - **Strict Privilege Demarcation**: Ordinary dashboard users (`Operator`, `Viewer`) are strictly forbidden (`403 Forbidden`) from triggering background worker routines or modifying global automation settings. Only `Owner` and `Admin` sessions are permitted manual override execution.
+- **Production Activation Safeguards**:
+  - All automated capabilities are deployed in inert default states:
+    - AI Receptionist Mode: `disabled`
+    - Appointment Policy Mode: `mode_a_read_only`
+    - Global Outbound Automations: `false`
+    - Campaigns: `draft` / `paused`
+    - Legacy Cutover: `legacy_active` (new engine blocked)
+  - Zero autonomous dispatches can occur until intentional, audited administrative activation.
+
 ---
 
 ## 3. Vulnerability Reporting & Patch Policy

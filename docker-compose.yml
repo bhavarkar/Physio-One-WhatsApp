@@ -104,6 +104,44 @@ services:
       - physio_network
 
   # ----------------------------------------------------------------------------
+  # Automation & Campaign Background Worker Service
+  # ----------------------------------------------------------------------------
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: physio_worker
+    restart: unless-stopped
+    command: ["python", "-m", "app.workers.runner"]
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-physio_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-physio_secure_password}
+      - POSTGRES_DB=${POSTGRES_DB:-physio_one_db}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-physio_admin}:${POSTGRES_PASSWORD:-physio_secure_password}@postgres:5432/${POSTGRES_DB:-physio_one_db}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_URL=redis://redis:6379/0
+      - AUTOMATION_WORKER_SECRET_TOKEN=${AUTOMATION_WORKER_SECRET_TOKEN:-}
+      - WORKER_POLL_INTERVAL_SECONDS=15
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
+      api:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+      - media_storage:/app/storage
+    networks:
+      - physio_network
+
+  # ----------------------------------------------------------------------------
   # Next.js Frontend Dashboard Service
   # ----------------------------------------------------------------------------
   frontend:

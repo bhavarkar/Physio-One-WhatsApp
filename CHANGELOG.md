@@ -7,9 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.0-draft] - 2026-11-14
+## [1.0.0-draft] - 2026-11-15
 
 ### Added
+- **Task 13: Production Readiness, Security Hardening & End-to-End Integration**:
+  - **Next.js Production Build Failure Resolution**:
+    - Identified upstream Next.js App Router bug in pure App Router projects (`/_document` / `/_app` check throwing `PageNotFoundError`).
+    - Implemented `frontend/scripts/patch-next.js` executed via `npm postinstall` in `package.json`.
+    - Tuned `frontend/next.config.js` (`cleanDistDir: false`, `workerThreads: true`, `cpus: 1`) to eliminate Windows Node child process IPC deadlocks.
+    - Verified production build: all 18 routes compile cleanly, `npm run build` exits code 0 in ~52s, and production server successfully renders `/login` and `/dashboard`.
+  - **Multi-Tier Worker & Scheduler Authentication**:
+    - Created `backend/app/core/worker_auth.py` providing `require_worker_auth` FastAPI dependency for Cloud Tasks, Cloud Scheduler, and internal worker routes.
+    - Tier 1: Google Cloud OIDC token validation verifying issuer (`accounts.google.com`), audience (`OIDC_AUDIENCE` / `CLOUD_RUN_SERVICE_URL`), expiration with clock-skew buffer, and authorized service account email (`WORKER_SERVICE_ACCOUNT_EMAIL`).
+    - Tier 2: Constant-time HMAC comparison (`hmac.compare_digest`) on `X-Worker-Token` matching `AUTOMATION_WORKER_SECRET_TOKEN` to prevent timing attacks.
+    - Tier 3: Owner / Admin session validation allowing manual administrative overrides from dashboard.
+    - Hardened `/api/v1/automations/process-due`, `/api/v1/automations/scan-inactivity`, `/api/v1/campaigns/worker/run`, and `/api/v1/ai-inbound/process-due`. Rejects unauthenticated callers (401) and ordinary users (403).
+  - **End-to-End Integration Test Suite (`backend/tests/test_e2e_integration_scenarios.py`)**:
+    - Scenario A: WhatsApp inbound webhook -> deduplication -> durable queue -> shadow Deepti -> AI response draft creation -> verified zero outbound external send.
+    - Scenario B: Controlled appointment booking lifecycle -> slot check -> patient verification -> confirmation -> staff approval -> appointment creation -> reminder scheduling.
+    - Scenario C: Human takeover -> staff takeover flag -> Deepti automated processing suppression -> no stale replies.
+    - Scenario D: Reminder lifecycle -> appointment rescheduled -> obsolete reminder cancelled -> replacement reminder scheduled.
+    - Scenario E: Instagram campaign -> audience evaluation -> consent safety gates -> preview -> Owner/Admin approval -> simulated worker dispatch -> analytics update.
+    - Scenario F: Patient STOP / Opt-Out -> `opted_out_all = true` -> global outbound suppression.
+    - Scenario G: Worker crash recovery -> lease timeout -> expired lock reset -> durable idempotency.
+    - Worker Security: Multi-tier OIDC, X-Worker-Token HMAC, and Admin session verification.
+    - Expanded backend test suite from 160 to 168 passing tests.
+  - **Background Worker Daemon (`backend/app/workers/runner.py`)**:
+    - Implemented background worker daemon processing scheduled automations, campaign dispatches, and debounced inbound jobs with graceful shutdown (`SIGINT`/`SIGTERM`).
+  - **Docker Compose & Deployment Hardening**:
+    - Added `worker` daemon service to `docker-compose.yml`.
+    - Updated `docker/Dockerfile.frontend` to copy `scripts/` before `npm install` for reproducible container builds.
+    - Authored operational runbooks: `DEPLOYMENT.md`, `STAGING_CHECKLIST.md`, `PRODUCTION_READINESS.md`, `INCIDENT_RESPONSE.md`, `BACKUP_RECOVERY.md`.
+  - **Production Activation Safeguards**:
+    - Verified all production safety defaults in database models: AI receptionist mode (`disabled`), appointment policy mode (`mode_a_read_only`), outbound automations (`false`), campaign status (`draft`), and legacy cutover (`legacy_active`).
+
 - **Task 12: Instagram Re-engagement, YCloud Migration & Controlled WhatsApp Campaigns**:
   - Authored Alembic migration `008_campaigns_instagram_reengagement.py` establishing 8 new database tables and altering `campaigns` with full SQLite and PostgreSQL cross-dialect support:
     - `campaign_media`: Approved Instagram reel and multimedia library with URL validation, staff ownership, caption, tags, and active status.

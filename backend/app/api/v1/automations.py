@@ -49,6 +49,7 @@ from app.schemas.automation import (
     AutomationWorkerRunResponse,
 )
 from app.api.deps import get_current_user, require_role
+from app.core.worker_auth import require_worker_auth
 from app.services.automation_service import AutomationService
 from app.services.automation_worker import AutomationWorkerService
 from app.services.eligibility_service import EligibilityService
@@ -676,49 +677,26 @@ async def test_automation_rendering(
 @router.post("/process-due", response_model=AutomationWorkerRunResponse)
 async def process_due_jobs(
     limit: int = Query(20, ge=1, le=100),
-    x_worker_token: Optional[str] = Header(None),
+    worker_auth: Dict[str, Any] = Depends(require_worker_auth),
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
 ):
     """Trigger one worker cycle to lock and execute due scheduled jobs.
     
-    Protected via verified worker token or logged-in Owner/Admin/Operator session.
+    Protected via verified Google OIDC token, worker token, or logged-in Owner/Admin session.
     """
-    authorized = False
-    if current_user and current_user.role.name in ["owner", "admin", "operator"]:
-        authorized = True
-    elif x_worker_token and x_worker_token == app_settings.AUTOMATION_WORKER_SECRET_TOKEN:
-        authorized = True
-
-    if not authorized:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unauthorized service caller. Valid worker token or admin session required.",
-        )
-
     stats = await AutomationWorkerService.run_worker_cycle(db, limit=limit)
     return AutomationWorkerRunResponse(**stats)
 
 
 @router.post("/scan-inactivity", response_model=Dict[str, int])
 async def scan_inactivity_now(
-    x_worker_token: Optional[str] = Header(None),
+    worker_auth: Dict[str, Any] = Depends(require_worker_auth),
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
 ):
-    """Trigger 15-minute conversation inactivity evaluation scan."""
-    authorized = False
-    if current_user and current_user.role.name in ["owner", "admin", "operator"]:
-        authorized = True
-    elif x_worker_token and x_worker_token == app_settings.AUTOMATION_WORKER_SECRET_TOKEN:
-        authorized = True
-
-    if not authorized:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unauthorized service caller. Valid worker token or admin session required.",
-        )
-
+    """Trigger 15-minute conversation inactivity evaluation scan.
+    
+    Protected via verified Google OIDC token, worker token, or logged-in Owner/Admin session.
+    """
     created_jobs = await AutomationService.scan_and_schedule_inactivity_followups(db)
     await db.commit()
     return {"newly_scheduled_count": len(created_jobs)}

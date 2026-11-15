@@ -630,6 +630,39 @@ flowchart TD
    - Computes delivery rate, read rate, failure rate, and conversion rate.
    - Automatically attributes clinic appointments confirmed within a 72-hour window following campaign delivery to the campaign record.
 
+---
+
+## 15. Production Readiness, Security Hardening & End-to-End Integration (Task 13)
+
+### 15.1 Multi-Tier Worker & Scheduler Authentication Architecture
+To support Google Cloud Tasks and Cloud Scheduler deployment on Cloud Run while safeguarding internal worker endpoints, privileged automation and worker routes (`/api/v1/automations/process-due`, `/api/v1/automations/scan-inactivity`, `/api/v1/campaigns/worker/run`, `/api/v1/ai-inbound/process-due`) are protected by `require_worker_auth` (`backend/app/core/worker_auth.py`):
+1. **Google Cloud Tasks / Cloud Scheduler OIDC Identity Tokens**:
+   - Cloud Tasks and Cloud Scheduler attach an OIDC ID token signed by Google (`iss`: `https://accounts.google.com`).
+   - Validates signature, audience (`OIDC_AUDIENCE` / `CLOUD_RUN_SERVICE_URL`), expiration (`exp` with clock skew tolerance), and authorized service account email (`WORKER_SERVICE_ACCOUNT_EMAIL`).
+2. **Hardened Worker Secret Token (`X-Worker-Token`)**:
+   - Compares the request header against `AUTOMATION_WORKER_SECRET_TOKEN` using `hmac.compare_digest` to prevent timing attacks.
+   - Enforces a minimum length requirement (16+ characters).
+3. **Owner / Admin Dashboard Session**:
+   - Allows authenticated clinic Owners and Administrators to manually trigger worker processing cycles or diagnostics from the UI.
+   - Strictly rejects ordinary users (operator, viewer) with `403 Forbidden`, and unauthenticated requests with `401 Unauthorized`.
+4. **Strict Production Enforcement**:
+   - When `REQUIRE_OIDC_IN_PRODUCTION=true`, shared secret fallback is disabled, enforcing mutual service account authentication.
+
+### 15.2 Background Worker Daemon (`app.workers.runner`)
+A dedicated Python worker daemon provides continuous background processing for containerized or VM deployments:
+- Orchestrates three asynchronous execution cycles:
+  1. Scheduled automations & lease recovery (`AutomationWorkerService.run_worker_cycle`).
+  2. Instagram re-engagement campaigns (`CampaignService.run_reengagement_cycle`).
+  3. Inbound AI debounced jobs (`InboundQueueService` + `InboundOrchestrator`).
+- Implements resilient signal handling (`SIGINT`/`SIGTERM`) for zero-data-loss graceful container shutdowns.
+- Configurable polling interval via `WORKER_POLL_INTERVAL_SECONDS` (default: 15s).
+
+### 15.3 Next.js Production Build Architecture
+- Resolved upstream App Router compilation race conditions on Windows/Node environments via automated `scripts/patch-next.js` in `package.json` `postinstall`.
+- Optimized Webpack compilation settings (`cleanDistDir: false`, `workerThreads: true`, `cpus: 1`) preventing child process IPC deadlocks.
+- All 18 routes compile cleanly into static and server-rendered bundles with full TypeScript typing.
+
+
 
 
 
