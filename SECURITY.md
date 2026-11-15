@@ -203,3 +203,12 @@ The platform handles patient communications, appointment schedules, and contact 
 - Regular dependency scanning via `pip-audit` and `npm audit`.
 - Security patches are released with PATCH version bumps (e.g. `v1.0.1`) following the automated update pipeline.
 
+
+---
+
+## Task 14 Security Findings (2026-11-15)
+
+- **CRITICAL (fixed):** Worker OIDC previously trusted *unverified* JWT claims (decode-only). Any self-signed token with Google-shaped claims would pass. Now `verify_google_oidc_token()` performs certificate-backed signature verification via google-auth, and claim checks fail closed when audience (or, in staging/production, worker service-account email) is unconfigured. Regression tests in `backend/tests/test_staging_infrastructure.py`.
+- Worker secret token still requires >=16 chars + constant-time compare. Admin-session fallback unchanged.
+- Remaining: Cloud Run API ingress is public for webhooks — Meta/YCloud signature verification is the control; consider Cloud Armor at production. No secrets committed; staging secrets via Secret Manager only (see `infra/staging/main.tf`).
+- Mandatory defaults unchanged: `AUTOMATION_OUTBOUND_ENABLED=false`, AI `disabled`, appointment policy `mode_a_read_only`, campaigns draft, legacy `legacy_active`.

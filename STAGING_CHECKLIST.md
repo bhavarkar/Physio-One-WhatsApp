@@ -88,3 +88,12 @@
 | Clinic Technical Lead | | | Pending |
 | Clinic Medical Director | | | Pending |
 | Security Officer | | | Pending |
+
+---
+
+## Task 14 Additions
+- [ ] Explicit approval of staging cost estimate (~USD 15–35/mo) and project ID before any `terraform apply`.
+- [ ] `python scripts/verify_postgres.py` passes against a disposable `*_verify`/`staging` database (63 tables, HNSW, exclusion constraint, head=008).
+- [ ] Forged (unsigned) OIDC token to a worker endpoint returns 401 — verifies Task 14 signature-verification fix live.
+- [ ] Cloud Tasks test task delivered once despite duplicate create (deterministic task name).
+- [ ] Redis absence confirmed: stack runs with no Redis service.

@@ -10,6 +10,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0-draft] - 2026-11-15
 
 ### Added
+- **Task 14: Controlled Staging Deployment & Infrastructure Verification**:
+  - **Docker Desktop & Windows Environment Diagnosis & Repair**:
+    - Diagnosed Docker Desktop installation path in Windows user scope (`$env:LOCALAPPDATA\Programs\DockerDesktop\Docker Desktop.exe` via Microsoft Store).
+    - Resolved missing system service by launching through Windows desktop shell; verified WSL2 `docker-desktop` Linux distribution state.
+    - Verified complete Docker Engine responsiveness (`Docker 29.7.2`, `Compose v5.5.1`, Linux kernel 6.18 WSL2).
+  - **Docker Compose Stack Validation**:
+    - Successfully built and instantiated all 4 core services (`physio_postgres`, `physio_migration`, `physio_api`, `physio_worker`, `physio_frontend`).
+    - Verified all services healthy; audited and eliminated legacy Redis dependency (zero application usage).
+    - Added root `.dockerignore` to shield build context from local `.env` and `.venv` files.
+  - **PostgreSQL 16 & pgvector Live Migration Chain Verification**:
+    - Discovered and resolved Alembic PostgreSQL limitation where default `alembic_version.version_num` is `VARCHAR(32)`, failing on revisions with names > 32 chars (`002_appointment_history_and_rules`, `008_campaigns_instagram_reengagement`).
+    - Configured `DefaultImpl.version_table_impl` and `run_migrations_online` in `backend/alembic/env.py` with `VARCHAR(128)` to natively support descriptive revision names.
+    - Ran live verification on isolated PostgreSQL 16 database using `scripts/verify_postgres.py`:
+      - 8/8 migrations upgraded to head (`008_campaigns_instagram_reengagement`).
+      - All 63 tables verified.
+      - pgvector extension verified.
+      - HNSW vector indexes verified.
+      - Appointment exclusion constraints verified.
+      - Foreign key integrity and upgrade compatibility verified.
+  - **Google Cloud Staging Infrastructure as Code (Terraform)**:
+    - Authored reproducible Terraform configuration in `infra/staging/main.tf` for Cloud Run v2, private Cloud SQL PostgreSQL 16, Cloud Tasks queues, and Cloud Scheduler OIDC jobs.
+    - Sized staging footprint for cost containment (approx. USD 15-35/mo with scale-to-zero Cloud Run and db-f1-micro Cloud SQL).
+    - Preserved Phase 10 approval gate: zero cloud resources provisioned without explicit user authorization.
+  - **Quality & Test Regressions**:
+    - Resolved timezone-aware SQLite string comparison edge case in campaign window scheduling.
+    - Backend pytest: 179 passed (100% pass rate).
+    - Frontend Jest: 14 passed; TypeScript `tsc --noEmit` 0 errors.
+    - Clean Next.js production build: 18/18 static routes rendered; CP1-CP8 diagnostic logging removed.
+
 - **Task 13: Production Readiness, Security Hardening & End-to-End Integration**:
   - **Next.js Production Build Failure Resolution**:
     - Identified upstream Next.js App Router bug in pure App Router projects (`/_document` / `/_app` check throwing `PageNotFoundError`).
@@ -303,3 +332,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Directory layout scaffolding for backend (`core`, `api`, `models`, `schemas`, `services`, `agents`, `tools`, `workers`), frontend (`src`), docker, scripts, and docs.
   - Ralph Loop configuration with `PRD.md`, `progress.txt`, and `prompt.md`.
   - Centralized version manifest `version.json` and template configuration `.env.example`.
+
+## Task 14 — Controlled Staging Preparation (2026-11-15)
+- **Security fix (critical):** worker OIDC tokens are now signature-verified (google-auth); claim checks fail closed. Previously only unverified claims were inspected.
+- Added Cloud Tasks dispatch service (disabled by default, dedup task names, OIDC) and `runner --once` bounded mode for Cloud Run Jobs.
+- Removed unused Redis from Docker Compose and deprecated Redis/Celery config; API image non-root + `$PORT`; frontend image uses `npm ci`.
+- Added Terraform staging IaC (`infra/staging/`), PostgreSQL live-verification script (`scripts/verify_postgres.py`), and staging tests. **No cloud resources created; deployment pending explicit approval (~USD 15–35/mo estimate).**

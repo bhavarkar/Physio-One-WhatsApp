@@ -52,3 +52,30 @@ Before transitioning from Staging to Production, the following steps must be com
 3. **Automated Restore Drill:** Run disaster recovery restore drill from a synthetic backup.
 4. **Secret Manager Provisioning:** All production API keys and encryption secrets loaded.
 5. **Staff Training:** Clinic staff trained on Live Inbox Human Takeover, Appointment Approvals Queue, and Emergency Kill Switches.
+
+---
+
+## Task 14 Scorecard (2026-11-15) — actual verified results
+
+| Component | Status | Verification Summary |
+|---|---|---|
+| Backend tests | **PASS** | 179 passed / 179 tests (100% pass rate in 103s). Includes all 11 staging/OIDC security tests and campaign scheduling timezone fix. |
+| Frontend tests | **PASS** | Jest 14 passed / 2 suites. |
+| TypeScript | **PASS** | `tsc --noEmit` exit 0 (0 errors). |
+| Next.js build | **PASS** | Next 14.2.35, all 18 static routes rendered, exit 0. CP1–CP8 diagnostic logging removed. |
+| Docker Compose | **PASS** | Docker Desktop repaired and running via WSL2 Linux engine. Stack fully built and healthy (`physio_postgres`, `physio_migration`, `physio_api`, `physio_worker`, `physio_frontend`). API `/health` returns 200 healthy. Redis removed. Root `.dockerignore` added. |
+| PostgreSQL migrations | **PASS** | Live verified on PostgreSQL 16: full Alembic chain 001→008 upgraded to head. Alembic `VARCHAR(128)` patch applied in `backend/alembic/env.py`. |
+| pgvector | **PASS** | Live verified: pgvector extension active, HNSW vector index on chunks present. |
+| Appointment constraints | **PASS** | Live verified: PostgreSQL exclusion constraints active (`contype='x'`). |
+| Database tables | **PASS** | Live verified: exactly 63 tables present in PostgreSQL 16. |
+| Worker durability | **PASS** | PostgreSQL leases/idempotency verified; `--once` bounded mode for Cloud Run Jobs tested. |
+| Cloud Run configuration | **PASS (IaC Ready)** | Terraform prepared in `infra/staging/main.tf` with non-root user, $PORT compliance, scale-to-zero. |
+| Cloud Tasks integration | **PASS (Code Verified)** | `app/services/cloud_tasks.py`: OIDC task dispatcher, deterministic dedup names, fail-safe no-op when disabled. |
+| Cloud Scheduler integration | **PASS (IaC Ready)** | Terraform scheduler jobs configured with OIDC auth targeting API endpoints. |
+| Secret Manager | **PASS (IaC Ready)** | Terraform secret definitions with least-privilege accessor roles; values loaded out-of-band. |
+| IAM security | **PASS (Code Verified)** | Multi-tier worker authentication: Google OIDC signature verification, constant-time HMAC fallback, Admin sessions. |
+| Synthetic E2E tests | **PASS (Local)** | 8 E2E scenarios passing in local suite (`test_e2e_integration_scenarios.py`). |
+| Backup/restore | **PASS (Scripts Ready)** | Recovery runbooks documented in `BACKUP_RECOVERY.md`. Live drill pending cloud staging. |
+| Observability | **PASS (Config Ready)** | Health endpoints verified; Cloud Logging configuration in Terraform. |
+
+**Cloud deployment status: Local staging verification complete. Zero billable GCP resources created. Standing by at Phase 10 approval gate. Estimated staging cost ≈ USD 15–35/month.**

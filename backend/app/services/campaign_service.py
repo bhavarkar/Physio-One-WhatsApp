@@ -772,7 +772,11 @@ class CampaignService:
         camp_stmt = select(Campaign).where(
             Campaign.status.in_(["scheduled", "running"]),
             Campaign.is_approved.is_(True),
-            or_(Campaign.scheduled_for.is_(None), Campaign.scheduled_for <= now_utc),
+            or_(
+                Campaign.scheduled_for.is_(None),
+                Campaign.scheduled_for <= now_utc,
+                Campaign.scheduled_for <= now_utc.replace(tzinfo=None),
+            ),
         )
         campaigns = (await db.execute(camp_stmt)).scalars().all()
 

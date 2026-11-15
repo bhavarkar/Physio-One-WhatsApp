@@ -291,3 +291,8 @@
 
 
 
+
+---
+
+## Task 14 — Worker/Cloud Tasks API Notes (2026-11-15)
+Worker endpoints (`POST /api/v1/automations/process-due`, `/scan-inactivity`, `/api/v1/campaigns/worker/run`, `/api/v1/ai-inbound/process-due`) now require *cryptographically verified* Google OIDC tokens (signature + audience + service-account email, fail-closed), a >=16-char `X-Worker-Token`, or an owner/admin session. `app.services.cloud_tasks.dispatch_worker_task(kind, dedup_key)` creates OIDC Cloud Tasks for these endpoints when `CLOUD_TASKS_ENABLED=true`; otherwise it is a structured no-op and PostgreSQL polling/`--once` remains authoritative.

@@ -46,7 +46,9 @@ class Settings(BaseSettings):
             return self.DATABASE_URL_SYNC
         return f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
-    # Redis & Celery
+    # Redis & Celery — DEPRECATED (Task 14): no application code uses Redis/Celery.
+    # Durable state is PostgreSQL-backed; scheduling is Cloud Tasks/Scheduler.
+    # Retained only for backward-compatible env parsing; do not add new usage.
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
@@ -83,6 +85,16 @@ class Settings(BaseSettings):
     WORKER_SERVICE_ACCOUNT_EMAIL: Optional[str] = None
     OIDC_AUDIENCE: Optional[str] = None
     REQUIRE_OIDC_IN_PRODUCTION: bool = False
+
+    # Cloud Tasks dispatch (Task 14) — disabled by default; PostgreSQL job rows
+    # remain the source of truth, Cloud Tasks is only a delivery mechanism.
+    CLOUD_TASKS_ENABLED: bool = False
+    GCP_PROJECT_ID: Optional[str] = None
+    CLOUD_TASKS_LOCATION: str = "asia-south1"
+    CLOUD_TASKS_INBOUND_QUEUE: str = "physio-inbound"
+    CLOUD_TASKS_AUTOMATION_QUEUE: str = "physio-automation"
+    CLOUD_TASKS_CAMPAIGN_QUEUE: str = "physio-campaigns"
+    WORKER_BASE_URL: Optional[str] = None  # public Cloud Run API URL tasks POST to
 
 
 settings = Settings()

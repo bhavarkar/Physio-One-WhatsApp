@@ -669,3 +669,10 @@ A dedicated Python worker daemon provides continuous background processing for c
 
 
 
+
+---
+
+## Task 14 — Staging Architecture Decisions (2026-11-15)
+- **No Redis/Celery:** removed from Compose; no code used it. PostgreSQL is the sole durable queue/state store — no second queue architecture.
+- **Cloud execution model:** Cloud Tasks (OIDC-authenticated, deterministic task names) + Cloud Scheduler trigger existing worker HTTP endpoints; Cloud Run Jobs run `app.workers.runner --once` for bounded scans. The polling daemon is local-Compose only.
+- **IaC:** `infra/staging/main.tf` (Terraform, no hardcoded project/secrets, private Cloud SQL, scale-to-zero Cloud Run). Not applied — approval gate in DEPLOYMENT.md §8.

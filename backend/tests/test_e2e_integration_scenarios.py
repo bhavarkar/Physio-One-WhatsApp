@@ -756,13 +756,16 @@ async def test_worker_auth_security_tiers(async_session: AsyncSession, client: A
         "exp": now + 3600,
         "iat": now,
     }
-    # Verify claim validation directly
-    assert verify_google_oidc_claims(mock_payload) is True
+    # Verify claim validation directly (explicit audience/email: claims check fails closed when unconfigured)
+    _aud = mock_payload["aud"]; _email = mock_payload["email"]
+    assert verify_google_oidc_claims(mock_payload, expected_audience=_aud, expected_email=_email) is True
 
     # Expired token claim validation fails
     expired_payload = dict(mock_payload, exp=now - 100)
-    assert verify_google_oidc_claims(expired_payload) is False
+    assert verify_google_oidc_claims(expired_payload, expected_audience=_aud, expected_email=_email) is False
 
     # Bad issuer claim validation fails
     bad_iss_payload = dict(mock_payload, iss="https://untrusted-issuer.com")
-    assert verify_google_oidc_claims(bad_iss_payload) is False
+    assert verify_google_oidc_claims(bad_iss_payload, expected_audience=_aud, expected_email=_email) is False
+    # Unconfigured audience fails closed
+    assert verify_google_oidc_claims(mock_payload, expected_audience="https://other.example") is False

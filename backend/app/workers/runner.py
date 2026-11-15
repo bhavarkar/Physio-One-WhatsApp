@@ -112,4 +112,11 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # `--once`: single bounded cycle — the supported mode for Cloud Run Jobs /
+    # Cloud Scheduler-triggered execution. Without it, a polling daemon runs,
+    # which is ONLY appropriate for local Docker Compose (Cloud Run services
+    # scale to zero / throttle CPU outside requests; never deploy the loop there).
+    if "--once" in sys.argv:
+        asyncio.run(WorkerDaemon().run_cycle())
+    else:
+        asyncio.run(main())

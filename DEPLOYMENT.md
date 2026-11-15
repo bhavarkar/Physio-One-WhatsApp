@@ -202,3 +202,15 @@ gcloud builds submit \
 SELECT version_num FROM alembic_version;
 -- Expected head: 008_campaigns_instagram_reengagement
 ```
+
+---
+
+## 8. Task 14 — Staging Approval Gate (STOP)
+
+No cloud resources were created in Task 14. IaC lives in `infra/staging/main.tf` (validate-only; project ID via `TF_VAR_project_id`, secrets out-of-band, Cloud SQL private IP only, Cloud Run min-instances=0).
+
+**Cost estimate (verify before apply):** Cloud SQL `db-f1-micro` ≈ $8–12/mo; scale-to-zero Cloud Run + Tasks/Scheduler at staging volume ≈ $5–20/mo; logging/artifact storage ≈ $2–5/mo. **Total ≈ USD 15–35/month.** Set a billing budget alert first.
+
+**Before provisioning, obtain explicit approval for:** project ID, region `asia-south1`, the resource list in `infra/staging/main.tf`, deployment commands (`terraform init -backend-config=... && terraform plan` — `apply` only after approval), rollback (`terraform destroy` of staging-only resources / redeploy previous image), and cleanup (destroy staging project resources; secrets retained per policy).
+
+**Worker model:** Cloud Tasks (OIDC, deterministic task names for dedup) and Cloud Scheduler hit the existing authenticated worker endpoints; PostgreSQL leases/idempotency remain the source of truth. The polling daemon is local-only.

@@ -44,3 +44,8 @@ Each phase corresponds to discrete tasks defined in `PRD.md`:
 - **Task 15**: Versioned Update Manager & Safe Migrations
 - **Task 16**: E2E Testing, Security Hardening & Release Packaging
 
+
+---
+
+## Task 14 Status (2026-11-15)
+Local staging preparation complete; live Docker/PostgreSQL verification and cloud provisioning **pending explicit approval** at the gate in DEPLOYMENT.md §8. Task 15 not started.

@@ -2,8 +2,18 @@ import os
 import sys
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import (
+    engine_from_config,
+    pool,
+    text,
+    Table,
+    MetaData,
+    Column,
+    String,
+    PrimaryKeyConstraint,
+)
 from alembic import context
+from alembic.ddl.impl import DefaultImpl
 
 # Ensure backend directory is in sys.path
 backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -15,6 +25,31 @@ os.environ.setdefault("DISABLE_SQLALCHEMY_CEXT", "1")
 
 from app.core.config import settings
 from app.models import Base
+
+# Monkey-patch Alembic's default 32-character version_num column limitation.
+# Revisions such as '002_appointment_history_and_rules' (35 chars) and
+# '008_campaigns_instagram_reengagement' (38 chars) exceed 32 characters.
+def _version_table_impl(
+    self,
+    *,
+    version_table: str,
+    version_table_schema: str | None,
+    version_table_pk: bool,
+    **kw,
+) -> Table:
+    vt = Table(
+        version_table,
+        MetaData(),
+        Column("version_num", String(128), nullable=False),
+        schema=version_table_schema,
+    )
+    if version_table_pk:
+        vt.append_constraint(
+            PrimaryKeyConstraint("version_num", name=f"{version_table}_pkc")
+        )
+    return vt
+
+DefaultImpl.version_table_impl = _version_table_impl
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -61,6 +96,18 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        # PostgreSQL: Ensure alembic_version table exists with VARCHAR(128) or alter existing
+        try:
+            connection.execute(
+                text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(128) NOT NULL PRIMARY KEY)")
+            )
+            connection.execute(
+                text("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(128)")
+            )
+            connection.commit()
+        except Exception:
+            pass
+
         context.configure(
             connection=connection,
             target_metadata=target_metadata,

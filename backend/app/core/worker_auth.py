@@ -40,6 +40,34 @@ def _decode_jwt_unverified_claims(token: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+def verify_google_oidc_token(token: str, expected_audience: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Cryptographically verify a Google OIDC ID token (signature, iss, exp, aud).
+
+    Uses google-auth's certificate-backed verification. Fails closed: returns
+    None if the library is unavailable or verification fails. Claims from an
+    unverified decode are NEVER trusted for authorization (Task 14 fix —
+    previously only unverified claims were inspected).
+    """
+    audience = expected_audience or settings.OIDC_AUDIENCE or settings.CLOUD_RUN_SERVICE_URL
+    if not audience:
+        logger.warning("OIDC verification refused: no expected audience configured")
+        return None
+    try:
+        from google.oauth2 import id_token as _gid_token
+        from google.auth.transport import requests as _grequests
+    except Exception:
+        logger.error("google-auth unavailable; refusing OIDC token (fail closed)")
+        return None
+    try:
+        claims = _gid_token.verify_oauth2_token(token, _grequests.Request(), audience)
+    except Exception as exc:
+        logger.warning("OIDC signature verification failed: %s", exc)
+        return None
+    if not verify_google_oidc_claims(claims, expected_audience=audience):
+        return None
+    return claims
+
+
 def verify_google_oidc_claims(
     claims: Dict[str, Any],
     expected_audience: Optional[str] = None,
@@ -60,16 +88,22 @@ def verify_google_oidc_claims(
         logger.warning("OIDC verification failed: token expired at %s (now=%s)", exp, now)
         return False
 
-    # 3. Audience check
+    # 3. Audience check — fail closed when no audience is configured:
+    # without one, any Google-issued token would otherwise be accepted.
     target_aud = expected_audience or settings.OIDC_AUDIENCE or settings.CLOUD_RUN_SERVICE_URL
-    if target_aud:
-        aud = claims.get("aud")
-        if aud != target_aud:
-            logger.warning("OIDC verification failed: audience mismatch (got '%s', expected '%s')", aud, target_aud)
-            return False
+    if not target_aud:
+        logger.warning("OIDC verification failed: no expected audience configured")
+        return False
+    aud = claims.get("aud")
+    if aud != target_aud:
+        logger.warning("OIDC verification failed: audience mismatch (got '%s', expected '%s')", aud, target_aud)
+        return False
 
-    # 4. Authorized Service Account Email check
+    # 4. Authorized Service Account Email check — fail closed when unset in staging/production.
     target_email = expected_email or settings.WORKER_SERVICE_ACCOUNT_EMAIL
+    if not target_email and settings.ENVIRONMENT in ("staging", "production"):
+        logger.warning("OIDC verification failed: WORKER_SERVICE_ACCOUNT_EMAIL not configured")
+        return False
     if target_email:
         email = claims.get("email")
         if not email or email != target_email:
@@ -107,9 +141,10 @@ async def require_worker_auth(
     # Method 1: Google OIDC Token via Authorization: Bearer <ID_TOKEN>
     if auth_header.startswith("Bearer "):
         token = auth_header[7:].strip()
-        claims = _decode_jwt_unverified_claims(token)
-        if claims and claims.get("iss") in ["https://accounts.google.com", "accounts.google.com"]:
-            if verify_google_oidc_claims(claims):
+        peek = _decode_jwt_unverified_claims(token)  # peek only to detect Google issuer; never trusted
+        if peek and peek.get("iss") in ["https://accounts.google.com", "accounts.google.com"]:
+            claims = verify_google_oidc_token(token)
+            if claims:
                 caller_info["auth_method"] = "google_oidc"
                 caller_info["caller_identity"] = claims.get("email", "google_service_account")
                 logger.info(

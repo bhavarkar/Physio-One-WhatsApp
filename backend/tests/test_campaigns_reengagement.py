@@ -416,19 +416,9 @@ async def test_10_thirty_minute_scan_execution(async_session, admin_user, test_c
 @pytest.mark.asyncio
 async def test_11_sending_window_09_to_21_ist(async_session, admin_user, sample_reel_media):
     """Scenario 11: Defers execution if current time is outside window in IST."""
-    try:
-        from zoneinfo import ZoneInfo
-        now_ist = datetime.now(ZoneInfo("Asia/Kolkata"))
-    except Exception:
-        now_ist = datetime.now(timezone.utc)
-    # Choose a 1-hour window 6 to 7 hours away from current hour to guarantee outside window
-    outside_start_h = (now_ist.hour + 6) % 24
-    outside_end_h = (now_ist.hour + 7) % 24
-    if outside_end_h <= outside_start_h:
-        outside_start_h = 3
-        outside_end_h = 4
-    win_start = f"{outside_start_h:02d}:00"
-    win_end = f"{outside_end_h:02d}:00"
+    # Set a quiet night window guaranteed to be outside current time
+    win_start = "02:00"
+    win_end = "03:00"
 
     camp = await CampaignService.create_campaign(
         async_session,

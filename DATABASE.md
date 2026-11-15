@@ -184,3 +184,8 @@ alembic current
 # Run the complete database and migration test suite (13 tests)
 python -m pytest backend/tests/test_database.py -v
 ```
+
+---
+
+## Task 14 — PostgreSQL Verification (2026-11-15)
+Static audit: Alembic chain is linear `001→008`; migrations contain exactly 63 `create_table` calls matching the expected table count; HNSW indexes (001/004) and the appointment exclusion constraint (002) are present in DDL. Live verification against a fresh disposable database is scripted in `scripts/verify_postgres.py` (pgvector, 63 tables, HNSW, exclusion/FK constraints, head=008, optional `--from-revision` upgrade-preservation check) and remained **Blocked** in this session pending Docker/PostgreSQL availability — it must pass before staging is declared ready.

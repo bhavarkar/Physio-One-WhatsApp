@@ -65,3 +65,12 @@ docker compose run --rm migration
 # 3. Start full application stack
 docker compose up -d
 ```
+
+---
+
+## 5. Task 14 Verification Notes (2026-11-15)
+
+- **Redis removed**: audit found zero application references to Redis/Celery (only unused config constants). Compose no longer provisions Redis; durable jobs are PostgreSQL-backed. Do not re-add without code that uses it.
+- **Worker**: local Compose runs the polling daemon (acceptable locally). Cloud Run must use Scheduler/Tasks -> worker HTTP endpoints or the Cloud Run Job `python -m app.workers.runner --once`. Never deploy the polling loop as a Cloud Run service.
+- **Images**: API honours `$PORT` (Cloud Run), runs non-root; frontend uses `npm ci` with the committed lockfile.
+- **Verification status**: Docker daemon execution was not confirmed in this session (see PRODUCTION_READINESS.md scorecard); rerun: `docker compose config && docker compose build && docker compose up -d && docker compose ps`, then `python scripts/verify_postgres.py` against a disposable `*_verify` database.
