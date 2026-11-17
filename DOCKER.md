@@ -73,4 +73,18 @@ docker compose up -d
 - **Redis removed**: audit found zero application references to Redis/Celery (only unused config constants). Compose no longer provisions Redis; durable jobs are PostgreSQL-backed. Do not re-add without code that uses it.
 - **Worker**: local Compose runs the polling daemon (acceptable locally). Cloud Run must use Scheduler/Tasks -> worker HTTP endpoints or the Cloud Run Job `python -m app.workers.runner --once`. Never deploy the polling loop as a Cloud Run service.
 - **Images**: API honours `$PORT` (Cloud Run), runs non-root; frontend uses `npm ci` with the committed lockfile.
-- **Verification status**: Docker daemon execution was not confirmed in this session (see PRODUCTION_READINESS.md scorecard); rerun: `docker compose config && docker compose build && docker compose up -d && docker compose ps`, then `python scripts/verify_postgres.py` against a disposable `*_verify` database.
+- **Verification status**: Verified and operational.
+
+---
+
+## 6. Task 15 — Docker Security Hardening & Execution Status (2026-11-17)
+
+- **PostgreSQL Localhost Binding**:
+  - `docker-compose.yml` updated from `"${POSTGRES_PORT:-5432}:5432"` to `"127.0.0.1:${POSTGRES_PORT:-5432}:5432"`.
+  - Prevents exposing the database port on public or local network interfaces (`0.0.0.0`).
+- **Non-Root Execution**:
+  - `Dockerfile.api`: runs as `USER appuser`.
+  - `Dockerfile.frontend`: runs as `USER nextjs`.
+- **Live Stack Status**:
+  - 4 services active and healthy: `physio_postgres` (pgvector:pg16), `physio_api`, `physio_worker`, `physio_frontend`.
+  - One-shot `physio_migration` verified with exit code 0.

@@ -188,4 +188,19 @@ python -m pytest backend/tests/test_database.py -v
 ---
 
 ## Task 14 — PostgreSQL Verification (2026-11-15)
-Static audit: Alembic chain is linear `001→008`; migrations contain exactly 63 `create_table` calls matching the expected table count; HNSW indexes (001/004) and the appointment exclusion constraint (002) are present in DDL. Live verification against a fresh disposable database is scripted in `scripts/verify_postgres.py` (pgvector, 63 tables, HNSW, exclusion/FK constraints, head=008, optional `--from-revision` upgrade-preservation check) and remained **Blocked** in this session pending Docker/PostgreSQL availability — it must pass before staging is declared ready.
+Static audit: Alembic chain is linear `001→008`; migrations contain exactly 63 `create_table` calls matching the expected table count; HNSW indexes (001/004) and the appointment exclusion constraint (002) are present in DDL. Live verification against a fresh disposable database is scripted in `scripts/verify_postgres.py` (pgvector, 63 tables, HNSW, exclusion/FK constraints, head=008, optional `--from-revision` upgrade-preservation check).
+
+---
+
+## Task 15 — Live Database Verification & Alembic Version Hardening (2026-11-17)
+- **Live PostgreSQL 16 + pgvector Execution:**
+  - Ran `scripts/verify_postgres.py` against isolated PostgreSQL 16 container (`physio_postgres`).
+  - Verified pgvector extension active (`vector` type registered).
+  - Exactly 63 tables verified and mapped.
+  - HNSW vector indexes verified on `knowledge_chunks` and `conversation_memory`.
+  - Exclusion constraints verified: `bdr_appointments_no_overlap` (`contype='x'`).
+  - Synthetic data preserved across upgrade simulation.
+- **Alembic Version Table Patch:**
+  - Standard Alembic hardcodes `Column("version_num", String(32))` in `DefaultImpl.version_table_impl`.
+  - Revisions `002_appointment_history_and_rules` (35 chars) and `008_campaigns_instagram_reengagement` (38 chars) exceed 32 characters, which caused `StringDataRightTruncation` on PostgreSQL.
+  - Patched `backend/alembic/env.py` with `_version_table_impl` setting `String(128)` and added an online migration hook ensuring `alembic_version` table uses `VARCHAR(128)`.

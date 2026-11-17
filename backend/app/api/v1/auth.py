@@ -36,7 +36,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 def set_auth_cookies(response: Response, session_token: str, csrf_token: str):
     """Set secure HTTP-only session cookie and JavaScript-accessible CSRF cookie."""
-    is_prod = (settings.ENVIRONMENT == "production" or settings.COOKIE_SECURE)
+    is_prod = (settings.ENVIRONMENT in ("production", "staging") or settings.COOKIE_SECURE)
     
     response.set_cookie(
         key="session_id",

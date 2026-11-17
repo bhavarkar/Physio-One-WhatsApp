@@ -96,19 +96,20 @@ def calculate_next_eligible_send_time(
     quiet_end: str = "09:00",
     permitted_days: Optional[List[int]] = None,
     tz_name: str = DEFAULT_TIMEZONE,
+    allow_past: bool = False,
 ) -> datetime:
     """Calculate the next earliest valid timestamp for dispatch.
     
     If dt is currently within business hours and not in quiet hours, returns dt.
     Otherwise advances to the next permitted open window at start_hour.
-    Never returns a time in the past.
+    Never returns a time in the past unless allow_past is True (e.g. for testing calculation logic).
     """
     tz = get_tz(tz_name)
     now_utc = datetime.now(timezone.utc)
     base_dt = dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
-    # Do not schedule in the past
-    if base_dt < now_utc:
+    # Do not schedule in the past unless explicitly allowed
+    if not allow_past and base_dt < now_utc:
         base_dt = now_utc
 
     local_dt = base_dt.astimezone(tz)

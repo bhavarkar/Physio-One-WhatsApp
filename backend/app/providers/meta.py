@@ -224,8 +224,10 @@ class MetaCloudProvider(WhatsAppProvider):
     def verify_subscription_challenge(
         self, mode: Optional[str], token: Optional[str], challenge: Optional[str]
     ) -> WebhookVerificationResult:
-        """Verify Meta webhook challenge verification."""
-        if mode == "subscribe" and token and token == self.webhook_verify_token:
+        """Verify Meta webhook challenge verification using constant-time comparison."""
+        expected_token = self.webhook_verify_token or ""
+        token_valid = bool(token and expected_token and hmac.compare_digest(token, expected_token))
+        if mode == "subscribe" and token_valid:
             return WebhookVerificationResult(is_valid=True, challenge=challenge)
         return WebhookVerificationResult(
             is_valid=False,

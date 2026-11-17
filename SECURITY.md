@@ -206,9 +206,26 @@ The platform handles patient communications, appointment schedules, and contact 
 
 ---
 
-## Task 14 Security Findings (2026-11-15)
+## Task 15 Security Hardening & Preflight Verification (2026-11-17)
 
-- **CRITICAL (fixed):** Worker OIDC previously trusted *unverified* JWT claims (decode-only). Any self-signed token with Google-shaped claims would pass. Now `verify_google_oidc_token()` performs certificate-backed signature verification via google-auth, and claim checks fail closed when audience (or, in staging/production, worker service-account email) is unconfigured. Regression tests in `backend/tests/test_staging_infrastructure.py`.
-- Worker secret token still requires >=16 chars + constant-time compare. Admin-session fallback unchanged.
-- Remaining: Cloud Run API ingress is public for webhooks — Meta/YCloud signature verification is the control; consider Cloud Armor at production. No secrets committed; staging secrets via Secret Manager only (see `infra/staging/main.tf`).
-- Mandatory defaults unchanged: `AUTOMATION_OUTBOUND_ENABLED=false`, AI `disabled`, appointment policy `mode_a_read_only`, campaigns draft, legacy `legacy_active`.
+- **Webhook Cryptographic Timing-Attack Resistance**:
+  - Subscription challenge verification in `MetaCloudProvider.verify_subscription_challenge` updated to use `hmac.compare_digest` for constant-time token comparison.
+  - Inbound webhook signatures for Meta (`x-hub-signature-256`) and YCloud (`ycloud-signature`) verified via constant-time HMAC-SHA256 digest comparison against encrypted app secrets.
+- **Login Rate-Limiting & Brute-Force Lockout Defense**:
+  - `LoginRateLimiter` enforces a 5-attempt sliding window (300s window) with a mandatory 10-minute (600s) lockout upon threshold exhaustion.
+  - Tracking keys isolate attempts per IP and per normalized email address (`{ip}:{email}`).
+  - Successful authentication resets attempt counters.
+- **Strict Cookie Security Flag in Staging & Production**:
+  - `set_auth_cookies` in `backend/app/api/v1/auth.py` updated to enforce `Secure=True` and `SameSite=lax` whenever `ENVIRONMENT in ("production", "staging")` or `COOKIE_SECURE=True`.
+  - Ensures session and CSRF cookies are never transmitted over unencrypted HTTP in Cloud Run environments.
+- **CORS Wildcard Rejection**:
+  - `Settings` in `backend/app/core/config.py` enforces a Pydantic field validator that strictly rejects wildcard `*` origins in staging and production environments.
+- **Controlled Tool Execution Sandbox**:
+  - `ToolDispatcher` strictly enforces agent tool whitelists, RBAC caller permissions, and execution timeouts (15s).
+  - Unauthorized or unregistered tool invocations are rejected and recorded in `AIToolExecution` audit logs.
+- **Local Host Docker Binding**:
+  - `docker-compose.yml` updated to bind PostgreSQL strictly to `127.0.0.1:${POSTGRES_PORT:-5432}:5432`, preventing exposure on external network interfaces.
+- **Cloud Run & Cloud SQL Staging Network Hardening**:
+  - Cloud SQL configured with `ipv4_enabled = true` and zero authorized networks (all direct internet TCP connections blocked).
+  - Cloud Run connects via managed Cloud SQL socket volume (`/cloudsql/<instance_connection_name>`) and Google IAM credentials (`roles/cloudsql.client`), eliminating the expensive Serverless VPC Access connector while preserving zero-trust access.
+  - Cloud Run environment variables for sensitive settings (`POSTGRES_PASSWORD`, `APP_SECRET`, `JWT_SECRET_KEY`, `AUTOMATION_WORKER_SECRET_TOKEN`) wired to Secret Manager secret versions.

@@ -676,3 +676,11 @@ A dedicated Python worker daemon provides continuous background processing for c
 - **No Redis/Celery:** removed from Compose; no code used it. PostgreSQL is the sole durable queue/state store — no second queue architecture.
 - **Cloud execution model:** Cloud Tasks (OIDC-authenticated, deterministic task names) + Cloud Scheduler trigger existing worker HTTP endpoints; Cloud Run Jobs run `app.workers.runner --once` for bounded scans. The polling daemon is local-Compose only.
 - **IaC:** `infra/staging/main.tf` (Terraform, no hardcoded project/secrets, private Cloud SQL, scale-to-zero Cloud Run). Not applied — approval gate in DEPLOYMENT.md §8.
+
+---
+
+## Task 15 — Production Security Hardening & Preflight Architecture (2026-11-17)
+- **Zero-Trust Cloud SQL Connector:** Cloud SQL instance (`physio-staging-pg`) is configured with `ipv4_enabled = true` and zero authorized networks (direct external TCP access is rejected). Cloud Run connects over SSL via the managed Cloud SQL socket volume (`/cloudsql/<connection_name>`) and Google IAM credentials (`roles/cloudsql.client`), eliminating the expensive Serverless VPC Access connector while preserving zero-trust security.
+- **Secret Manager Environment Injection:** Cloud Run API service is wired directly to Google Secret Manager secret versions (`POSTGRES_PASSWORD`, `APP_SECRET`, `JWT_SECRET_KEY`, `AUTOMATION_WORKER_SECRET_TOKEN`) via `value_source.secret_key_ref`.
+- **Public vs. Protected Endpoints:** Cloud Run v2 services (`api`, `web`) grant `roles/run.invoker` to `allUsers` to permit public access for webhook delivery (Meta, YCloud) and browser frontend traffic. Private application endpoints are protected by FastAPI session cookies, CSRF tokens, RBAC dependencies, and HMAC signatures.
+- **Deterministic Scheduling Math:** `calculate_next_eligible_send_time` in `business_hours_service.py` supports `allow_past=True` for deterministic test math while preserving the production invariant that outbound automations are never scheduled in the past.

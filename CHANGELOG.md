@@ -7,9 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.0-draft] - 2026-11-15
+## [1.0.0-draft] - 2026-11-17
 
 ### Added
+- **Task 15: Production Security Hardening, Cloud Staging Preflight & Deployment Approval Gate**:
+  - **Comprehensive Security Audit & Defect Remediation**:
+    - **Webhook Cryptographic Timing-Attack Defense**: Updated `MetaCloudProvider.verify_subscription_challenge` to compare challenge verification tokens using constant-time `hmac.compare_digest`.
+    - **Login Rate-Limiting & Lockout Protection**: Verified and expanded `LoginRateLimiter` sliding window rate limiter (5 failed attempts per 300s window triggers mandatory 600s lockout), isolating attempts per client IP and normalized email.
+    - **Cookie Security Enforcement**: Updated `set_auth_cookies` in `backend/app/api/v1/auth.py` so that `Secure=True` is enforced whenever `ENVIRONMENT in ("production", "staging")` or `COOKIE_SECURE=True`, preventing cookie transmission over cleartext HTTP.
+    - **CORS Policy Hardening**: Added Pydantic field validator in `backend/app/core/config.py` rejecting wildcard `*` origins in staging and production environments.
+    - **AI Tool Sandbox Boundary**: Audited and tested `ToolDispatcher` enforcement of agent tool whitelists, RBAC caller permissions, and execution timeouts with immutable audit logging.
+    - **Localhost Docker Binding**: Updated `docker-compose.yml` to bind PostgreSQL strictly to `127.0.0.1:${POSTGRES_PORT:-5432}:5432`, eliminating local network exposure.
+  - **Cloud Infrastructure Preflight (Terraform in `infra/staging`)**:
+    - Enhanced `infra/staging/main.tf` to configure Cloud SQL with `ipv4_enabled = true` and zero authorized networks (blocking all public internet TCP traffic), allowing Cloud Run to connect securely via managed Cloud SQL socket volume (`/cloudsql/<connection_name>`) and IAM client roles without requiring a costly ($20+/mo) Serverless VPC Access connector.
+    - Wired Cloud Run environment variables for sensitive settings (`POSTGRES_PASSWORD`, `APP_SECRET`, `JWT_SECRET_KEY`, `AUTOMATION_WORKER_SECRET_TOKEN`) directly to Google Secret Manager secret versions.
+    - Added public ingress IAM invoker bindings (`roles/run.invoker` for `allUsers`) to `api` and `frontend` Cloud Run services to allow inbound webhooks and browser web UI traffic.
+    - Formatted and validated Terraform configuration with zero errors.
+  - **Production Security Preflight Test Suite**:
+    - Created `backend/tests/test_production_security_preflight.py` with 8 comprehensive security test cases covering webhook cryptographic validation, rate-limiting, cookie flags, CORS validation, tool execution boundaries, and safe defaults.
+    - Resolved date-math test edge case in `business_hours_service.py` by supporting `allow_past=True` for deterministic test evaluations while preserving production invariants.
+    - **Backend Test Suite:** 187 passed / 187 tests (100% pass rate in 73s).
+    - **Frontend Test Suite:** 53 passed / 53 tests (12 Jest test suites).
+    - **TypeScript Typecheck:** `tsc --noEmit` exited code 0 with 0 errors.
+    - **Next.js Production Build:** 18/18 static routes compiled cleanly.
+  - **Staging Operations Runbook**:
+    - Authored `DEPLOYMENT_RUNBOOK.md` detailing prerequisites, GCP budget alerting ($35 ceiling), out-of-band Secret Manager population, Artifact Registry publishing, Terraform execution, database migration execution, smoke testing, fast revision rollback, and emergency kill-switches.
+  - **Realistic Staging Cost Assessment**:
+    - Itemized realistic monthly staging footprint in `asia-south1` (Cloud SQL db-f1-micro, scale-to-zero Cloud Run, Cloud Tasks, Cloud Scheduler, Secret Manager, Artifact Registry): **USD 11–18/month**, well within the USD 15–35/month budget.
+  - **Deployment Approval Gate**:
+    - Stopped at Task 15 Approval Gate: zero cloud resources provisioned, zero real WhatsApp messages dispatched, ready for operator authorization.
+
 - **Task 14: Controlled Staging Deployment & Infrastructure Verification**:
   - **Docker Desktop & Windows Environment Diagnosis & Repair**:
     - Diagnosed Docker Desktop installation path in Windows user scope (`$env:LOCALAPPDATA\Programs\DockerDesktop\Docker Desktop.exe` via Microsoft Store).

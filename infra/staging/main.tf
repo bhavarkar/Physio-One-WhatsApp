@@ -83,7 +83,7 @@ resource "google_secret_manager_secret_iam_member" "api_read" {
   member    = "serviceAccount:${google_service_account.api.email}"
 }
 
-# Cloud SQL: no public IP (Cloud Run connects via socket volume), smallest staging tier.
+# Cloud SQL: smallest staging tier; Cloud Run connects securely via Cloud SQL socket volume.
 resource "google_sql_database_instance" "pg" {
   name                = "${local.p}-pg"
   database_version    = "POSTGRES_16"
@@ -94,7 +94,9 @@ resource "google_sql_database_instance" "pg" {
     availability_type = "ZONAL"
     disk_size         = 10
     ip_configuration {
-      ipv4_enabled = false
+      ipv4_enabled = true
+      # No authorized networks: public internet direct TCP is rejected.
+      # Cloud Run accesses via managed Cloud SQL socket volume and IAM (roles/cloudsql.client).
     }
     backup_configuration {
       enabled = true
@@ -159,6 +161,42 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "WORKER_SERVICE_ACCOUNT_EMAIL"
         value = google_service_account.worker.email
       }
+      env {
+        name = "POSTGRES_PASSWORD"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.s["db-password"].secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "APP_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.s["app-secret"].secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "JWT_SECRET_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.s["jwt-secret"].secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "AUTOMATION_WORKER_SECRET_TOKEN"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.s["worker-token"].secret_id
+            version = "latest"
+          }
+        }
+      }
       volume_mounts {
         name       = "cloudsql"
         mount_path = "/cloudsql"
@@ -187,8 +225,32 @@ resource "google_cloud_run_v2_service" "frontend" {
       resources {
         limits = { cpu = "1", memory = "512Mi" }
       }
+      env {
+        name  = "INTERNAL_API_URL"
+        value = google_cloud_run_v2_service.api.uri
+      }
+      env {
+        name  = "NEXT_PUBLIC_API_URL"
+        value = google_cloud_run_v2_service.api.uri
+      }
     }
   }
+}
+
+# Public ingress permissions: webhooks and browser UI require external ingress.
+# Application auth (FastAPI cookies/tokens) and HMAC signatures protect all private data.
+resource "google_cloud_run_v2_service_iam_member" "api_public" {
+  name     = google_cloud_run_v2_service.api.name
+  location = var.region
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}
+
+resource "google_cloud_run_v2_service_iam_member" "frontend_public" {
+  name     = google_cloud_run_v2_service.frontend.name
+  location = var.region
+  role     = "roles/run.invoker"
+  member   = "allUsers"
 }
 
 # Bounded worker execution (Cloud Run Job) — never a polling Cloud Run service.

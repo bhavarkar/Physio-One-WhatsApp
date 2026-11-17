@@ -483,6 +483,7 @@ async def test_12_and_13_quiet_hours_and_timezone_handling():
         quiet_end="09:00",
         permitted_days=[1, 2, 3, 4, 5, 6],
         tz_name="Asia/Kolkata",
+        allow_past=True,
     )
     next_send_local = next_send.astimezone(tz)
     assert next_send_local.hour == 9

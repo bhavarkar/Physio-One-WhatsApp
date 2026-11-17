@@ -78,4 +78,24 @@ Before transitioning from Staging to Production, the following steps must be com
 | Backup/restore | **PASS (Scripts Ready)** | Recovery runbooks documented in `BACKUP_RECOVERY.md`. Live drill pending cloud staging. |
 | Observability | **PASS (Config Ready)** | Health endpoints verified; Cloud Logging configuration in Terraform. |
 
-**Cloud deployment status: Local staging verification complete. Zero billable GCP resources created. Standing by at Phase 10 approval gate. Estimated staging cost ≈ USD 15–35/month.**
+## Task 15 Scorecard (2026-11-17) — Production Security Hardening & Preflight Verification
+
+| Component | Status | Verification Summary |
+|---|---|---|
+| **Backend Tests** | **PASS** | **187 passed / 187 tests (100% pass rate in 73s)**. Includes 8 new production security preflight tests covering webhook signatures, rate-limiting, cookie flags, and tool execution boundaries. |
+| **Frontend Tests** | **PASS** | **53 passed / 53 tests (12 test suites)** across auth, settings, users, agents, appointments, knowledge, automations, campaigns, inbox, and API client. |
+| **TypeScript Compilation** | **PASS** | `tsc --noEmit` exited code 0 with **0 errors**. |
+| **Next.js Production Build** | **PASS** | Next 14.2.35, all 18 static routes generated cleanly, size optimized. |
+| **Docker Compose Stack** | **PASS** | Stack operational: `physio_postgres` (pgvector:pg16), `physio_api`, `physio_worker`, `physio_frontend`. PostgreSQL bound strictly to `127.0.0.1:5432`. Non-root users (`appuser`, `nextjs`). |
+| **PostgreSQL 16 & pgvector** | **PASS** | 63 tables, full linear migration chain `001→008`, HNSW vector indexing, appointment exclusion constraints (`bdr_appointments_no_overlap`). |
+| **Webhook Security** | **PASS** | Constant-time HMAC verification (`hmac.compare_digest`) for Meta challenge tokens and HMAC-SHA256 signatures for Meta and YCloud. |
+| **Authentication & Brute Force** | **PASS** | In-memory sliding window rate limiter (5 attempts / 300s, 600s lockout). Strict `Secure=True` cookies in staging and production. |
+| **CORS Policy** | **PASS** | Wildcard `*` origins strictly prohibited via Pydantic validator in staging and production environments. |
+| **AI Tool Execution Sandbox** | **PASS** | Tool whitelists, RBAC caller permission checks, 15s execution timeouts, and immutable audit logging in `AIToolExecution`. |
+| **Safe Operational Defaults** | **PASS** | `AUTOMATION_OUTBOUND_ENABLED=false`, AI Receptionist default `disabled` (Mode A read-only), campaign status `draft`, legacy cutover `legacy_active`. |
+| **Terraform Staging IaC** | **PASS** | `infra/staging/main.tf` validated and formatted. Cloud SQL socket volume `/cloudsql/<connection_name>` with IAM client, Secret Manager secrets wired to Cloud Run environment, scale-to-zero compute. |
+| **Staging Operations Runbook** | **PASS** | `DEPLOYMENT_RUNBOOK.md` authored detailing GCP prerequisites, out-of-band secret creation, image push, migration job, smoke tests, rollback, and kill-switches. |
+| **Realistic Staging Cost** | **VERIFIED** | Itemized estimate for `asia-south1`: **USD 11–18/month** (db-f1-micro + scale-to-zero Cloud Run). Hard budget alert target: USD 35. |
+
+**Deployment Approval Gate: STANDING BY AT TASK 15 APPROVAL GATE.**  
+**Zero billable GCP resources created. Zero real WhatsApp messages sent. Ready for controlled staging deployment upon explicit operator authorization.**

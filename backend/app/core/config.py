@@ -25,6 +25,16 @@ class Settings(BaseSettings):
     PORT: int = 8000
     BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
+    @field_validator("BACKEND_CORS_ORIGINS")
+    @classmethod
+    def validate_cors_origins(cls, v: List[str], info) -> List[str]:
+        env = info.data.get("ENVIRONMENT", "development")
+        if env in ("staging", "production"):
+            for origin in v:
+                if origin == "*" or origin.strip() == "*":
+                    raise ValueError(f"Wildcard CORS origin '*' is strictly prohibited in {env} environment.")
+        return v
+
     # Database
     POSTGRES_SERVER: str = "localhost"
     POSTGRES_PORT: int = 5432
