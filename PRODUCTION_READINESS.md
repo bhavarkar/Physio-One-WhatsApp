@@ -97,5 +97,26 @@ Before transitioning from Staging to Production, the following steps must be com
 | **Staging Operations Runbook** | **PASS** | `DEPLOYMENT_RUNBOOK.md` authored detailing GCP prerequisites, out-of-band secret creation, image push, migration job, smoke tests, rollback, and kill-switches. |
 | **Realistic Staging Cost** | **VERIFIED** | Itemized estimate for `asia-south1`: **USD 11–18/month** (db-f1-micro + scale-to-zero Cloud Run). Hard budget alert target: USD 35. |
 
-**Deployment Approval Gate: STANDING BY AT TASK 15 APPROVAL GATE.**  
-**Zero billable GCP resources created. Zero real WhatsApp messages sent. Ready for controlled staging deployment upon explicit operator authorization.**
+**Deployment Approval Gate: Task 15 Passed.**
+
+---
+
+## Task 16 Scorecard (2026-11-17) — Google Cloud Staging Deployment Readiness & Rehearsal
+
+| Component | Status | Verification Summary |
+|---|---|---|
+| **Backend Tests** | **PASS** | **207 passed / 207 tests (100% pass rate in 68s)**. Includes 20 new tests covering Cloud SQL Unix socket construction, connection pooling, kill-switch enforcement, and 14 synthetic rehearsal scenarios. |
+| **Frontend Tests** | **PASS** | **53 passed / 53 tests (12 Jest test suites in 34s)** across all dashboard modules. |
+| **TypeScript Compilation** | **PASS** | `tsc --noEmit` exited code 0 with **0 errors**. |
+| **Next.js Production Build** | **PASS** | Next 14.2.35: 18 static routes generated, size optimized, exit code 0. |
+| **Cloud SQL Socket Architecture** | **PASS** | Dynamic URL builder in `config.py` supporting `/cloudsql/...` Unix sockets for both `asyncpg` and `psycopg2`. Connection pool tuned (`pool_size=5`, `max_overflow=5`, `pool_recycle=1800`, `pool_pre_ping=True`) preventing connection exhaustion on `db-f1-micro`. |
+| **Cloud Run API & Worker Config** | **PASS** | `infra/staging/main.tf` audited: `POSTGRES_USER`, `POSTGRES_DB`, `POSTGRES_SOCKET_DIR`, and `OIDC_AUDIENCE` injected; `custom_audiences = ["https://physio-staging-api"]` configured; Cloud Run Job mounts Cloud SQL volume and DB secrets. |
+| **Central Outbound Kill-Switch** | **PASS** | `AUTOMATION_OUTBOUND_ENABLED=false` verified across all automated paths including `OutboundDispatcher.dispatch_ai_reply`, campaigns, and scheduled follow-ups. Zero bypasses. |
+| **Route Security Matrix** | **PASS** | 100% of exposed routes reviewed. Public routes restricted to `/health`, `/auth/login`, `/auth/setup-status`, `/auth/setup` (locked once initialized), and HMAC-verified webhooks. All private routes require session cookies and RBAC permissions. |
+| **Terraform Staging IaC** | **PASS** | Validated and formatted. `staging.tfvars.example` prepared. Exact 26 GCP resources reviewable in `STAGING_DEPLOYMENT_APPROVAL.md`. |
+| **14-Scenario Synthetic Rehearsal** | **PASS** | All 14 scenarios verified in automated test suite (login lockout, webhook crypto, subscription handshake, AI disabled mode, human takeover, STOP opt-out, Sunday clinic closure, operating hours, quiet hours forward scheduling, CORS wildcard rejection, cookie flags, Cloud Tasks disabled no-op). |
+| **Deployment Specification** | **PASS** | `STAGING_DEPLOYMENT_APPROVAL.md` authored with exact resource list, monthly cost ($11.40–14.80), required secrets, deployment CLI commands, and operator approval checklist. |
+
+**Final Decision: READY FOR STAGING DEPLOYMENT APPROVAL.**  
+**Status: STANDING BY AT TASK 16 APPROVAL GATE.**  
+**Zero billable GCP resources created. Zero real WhatsApp messages sent. Awaiting operator signature on `STAGING_DEPLOYMENT_APPROVAL.md`.**

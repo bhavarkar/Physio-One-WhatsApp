@@ -142,6 +142,11 @@ terraform plan \
 # Review the plan carefully: verify no destructive changes, zero public database IPs
 # Apply after explicit operator confirmation
 terraform apply staging.tfplan
+
+# Set Cloud SQL user password matching Secret Manager
+gcloud sql users set-password physio_admin \
+  --instance="physio-staging-pg" \
+  --password="$DB_PASS"
 ```
 
 ---

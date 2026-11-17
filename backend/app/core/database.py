@@ -47,8 +47,10 @@ async_engine_kwargs = {
 if not is_async_sqlite:
     async_engine_kwargs.update({
         "pool_pre_ping": True,
-        "pool_size": 10,
-        "max_overflow": 20,
+        "pool_size": settings.POSTGRES_POOL_SIZE,
+        "max_overflow": settings.POSTGRES_MAX_OVERFLOW,
+        "pool_recycle": settings.POSTGRES_POOL_RECYCLE,
+        "pool_timeout": settings.POSTGRES_POOL_TIMEOUT,
     })
 
 async_engine = create_async_engine(
@@ -72,7 +74,10 @@ sync_engine_kwargs = {
     "future": True,
 }
 if not is_sync_sqlite:
-    sync_engine_kwargs["pool_pre_ping"] = True
+    sync_engine_kwargs.update({
+        "pool_pre_ping": True,
+        "pool_recycle": settings.POSTGRES_POOL_RECYCLE,
+    })
 
 sync_engine = create_engine(
     settings.sync_database_url,

@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = "physio_admin"
     POSTGRES_PASSWORD: str = "physio_secure_password"
     POSTGRES_DB: str = "physio_one_db"
+    POSTGRES_SOCKET_DIR: Optional[str] = None  # e.g., /cloudsql/project:region:instance
+    POSTGRES_POOL_SIZE: int = 5
+    POSTGRES_MAX_OVERFLOW: int = 5
+    POSTGRES_POOL_RECYCLE: int = 1800
+    POSTGRES_POOL_TIMEOUT: int = 30
     DATABASE_URL: Optional[str] = None
     DATABASE_URL_SYNC: Optional[str] = None
 
@@ -48,12 +53,18 @@ class Settings(BaseSettings):
     def async_database_url(self) -> str:
         if self.DATABASE_URL:
             return self.DATABASE_URL
+        socket_dir = self.POSTGRES_SOCKET_DIR or (self.POSTGRES_SERVER if self.POSTGRES_SERVER and self.POSTGRES_SERVER.startswith("/") else None)
+        if socket_dir:
+            return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@/{self.POSTGRES_DB}?host={socket_dir}"
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
     @property
     def sync_database_url(self) -> str:
         if self.DATABASE_URL_SYNC:
             return self.DATABASE_URL_SYNC
+        socket_dir = self.POSTGRES_SOCKET_DIR or (self.POSTGRES_SERVER if self.POSTGRES_SERVER and self.POSTGRES_SERVER.startswith("/") else None)
+        if socket_dir:
+            return f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@/{self.POSTGRES_DB}?host={socket_dir}"
         return f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
     # Redis & Celery — DEPRECATED (Task 14): no application code uses Redis/Celery.

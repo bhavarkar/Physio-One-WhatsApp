@@ -14,6 +14,7 @@ from sqlalchemy import select, update
 from app.models.inbound import OutboundIdempotencyKey, AIInboundSettings
 from app.models.whatsapp import Conversation, WhatsAppContact, WhatsAppAccount, WhatsAppMessage
 from app.services.whatsapp_service import send_outbound_text_message, get_active_account_by_provider
+from app.core.config import settings as core_settings
 
 logger = logging.getLogger("physio_one.inbound.dispatcher")
 
@@ -34,6 +35,13 @@ class OutboundDispatcher:
     ) -> Dict[str, Any]:
         """Dispatch an AI generated response to WhatsApp with rigorous pre-flight safety gates."""
         # 1. Mandatory Pre-Flight Invariants
+        if not core_settings.AUTOMATION_OUTBOUND_ENABLED:
+            logger.info("Outbound dispatch blocked: AUTOMATION_OUTBOUND_ENABLED is False (kill-switch active)")
+            return {
+                "dispatched": False,
+                "reason": "Global automated outbound messaging is disabled by kill switch (AUTOMATION_OUTBOUND_ENABLED=false).",
+            }
+
         if settings.ai_mode != "live":
             logger.info(
                 "Outbound dispatch blocked: ai_mode is '%s' (not 'live') for conversation %s",

@@ -10,6 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0-draft] - 2026-11-17
 
 ### Added
+- **Task 16: Google Cloud Staging Deployment Readiness, Integration Verification & Approval Gate**:
+  - **Cloud SQL Connection Architecture Audit & Fixes**:
+    - Enhanced `backend/app/core/config.py` with `POSTGRES_SOCKET_DIR` and automatic socket path detection (`/cloudsql/...`), uniformly generating Unix domain socket query parameter URLs for both `asyncpg` (`postgresql+asyncpg://...`) and `psycopg2` (`postgresql+psycopg2://...`).
+    - Tuned SQLAlchemy connection pooling in `backend/app/core/database.py` (`pool_size=5`, `max_overflow=5`, `pool_recycle=1800`, `pool_timeout=30`, `pool_pre_ping=True`) ensuring Cloud Run containers never exhaust the `db-f1-micro` Cloud SQL connection ceiling.
+    - Updated `infra/staging/main.tf` to provision `google_sql_user.user` for `physio_admin`, wire `POSTGRES_USER`, `POSTGRES_DB`, and `POSTGRES_SOCKET_DIR` environment variables into Cloud Run `api` service and Cloud Run `worker_once` job.
+  - **Central Outbound Messaging Authorization Gate**:
+    - Identified and patched a bypass in `OutboundDispatcher.dispatch_ai_reply` where `AUTOMATION_OUTBOUND_ENABLED` was omitted. Added an unconditional pre-flight check so that when `AUTOMATION_OUTBOUND_ENABLED=False`, all automated AI dispatches are immediately blocked and logged.
+    - Verified that all automated outbound routes (AI receptionist, scheduled follow-ups, appointment reminders, and campaigns) strictly honor the emergency kill switch.
+  - **Terraform Staging IaC Refinements**:
+    - Added `custom_audiences = ["https://physio-staging-api"]` to `google_cloud_run_v2_service.api` and wired matching OIDC audiences into Cloud Scheduler and Cloud Tasks, eliminating cyclic dependency errors in Terraform while ensuring authenticated invocation.
+    - Authored `infra/staging/staging.tfvars.example` with clear staging variable placeholders.
+  - **Automated Staging Deployment Readiness & Rehearsal Test Suite**:
+    - Created `backend/tests/test_staging_deployment_readiness.py` with 20 comprehensive unit and integration tests covering Cloud SQL TCP vs Unix socket URL construction, connection pooling, kill-switch enforcement, and the 14 synthetic rehearsal scenarios.
+    - **Backend Test Suite:** 207 passed / 207 tests (100% pass rate in 68s).
+    - **Frontend Test Suite:** 53 passed / 53 tests (12 Jest test suites in 34s).
+    - **TypeScript Typecheck:** `tsc --noEmit` exited code 0 with 0 errors.
+    - **Next.js Production Build:** 18/18 static routes generated, exit code 0.
+  - **Operational Specification & Approval Gate**:
+    - Authored `STAGING_DEPLOYMENT_APPROVAL.md` with complete 12-section operational specification, reviewable list of 26 GCP resources, itemized monthly costs (USD 11.40–14.80/month), deployment CLI commands, verification smoke tests, and operator approval checklist.
+    - Preserved deployment boundary: standing by at the Task 16 Approval Gate. Zero cloud resources created.
+
 - **Task 15: Production Security Hardening, Cloud Staging Preflight & Deployment Approval Gate**:
   - **Comprehensive Security Audit & Defect Remediation**:
     - **Webhook Cryptographic Timing-Attack Defense**: Updated `MetaCloudProvider.verify_subscription_challenge` to compare challenge verification tokens using constant-time `hmac.compare_digest`.

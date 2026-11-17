@@ -108,6 +108,12 @@ resource "google_sql_database" "db" {
   instance = google_sql_database_instance.pg.name
   name     = "physio_one_staging"
 }
+
+resource "google_sql_user" "user" {
+  name     = "physio_admin"
+  instance = google_sql_database_instance.pg.name
+  # Password managed out-of-band via Secret Manager (physio-staging-db-password).
+}
 # pgvector is enabled by migration 001 (CREATE EXTENSION vector).
 
 resource "google_cloud_tasks_queue" "q" {
@@ -126,9 +132,10 @@ resource "google_cloud_tasks_queue" "q" {
 }
 
 resource "google_cloud_run_v2_service" "api" {
-  name     = "${local.p}-api"
-  location = var.region
-  ingress  = "INGRESS_TRAFFIC_ALL" # webhooks are public; protected by Meta/YCloud signature checks + app auth
+  name             = "${local.p}-api"
+  location         = var.region
+  ingress          = "INGRESS_TRAFFIC_ALL" # webhooks are public; protected by Meta/YCloud signature checks + app auth
+  custom_audiences = ["https://${local.p}-api"]
   template {
     service_account = google_service_account.api.email
     scaling {
@@ -158,8 +165,28 @@ resource "google_cloud_run_v2_service" "api" {
         value = "true"
       }
       env {
+        name  = "GCP_PROJECT_ID"
+        value = var.project_id
+      }
+      env {
+        name  = "OIDC_AUDIENCE"
+        value = "https://${local.p}-api"
+      }
+      env {
         name  = "WORKER_SERVICE_ACCOUNT_EMAIL"
         value = google_service_account.worker.email
+      }
+      env {
+        name  = "POSTGRES_USER"
+        value = "physio_admin"
+      }
+      env {
+        name  = "POSTGRES_DB"
+        value = google_sql_database.db.name
+      }
+      env {
+        name  = "POSTGRES_SOCKET_DIR"
+        value = "/cloudsql/${google_sql_database_instance.pg.connection_name}"
       }
       env {
         name = "POSTGRES_PASSWORD"
@@ -263,9 +290,65 @@ resource "google_cloud_run_v2_job" "worker_once" {
       containers {
         image   = var.api_image
         command = ["python", "-m", "app.workers.runner", "--once"]
+        resources {
+          limits = { cpu = "1", memory = "1Gi" }
+        }
+        env {
+          name  = "ENVIRONMENT"
+          value = "staging"
+        }
         env {
           name  = "AUTOMATION_OUTBOUND_ENABLED"
           value = "false"
+        }
+        env {
+          name  = "POSTGRES_USER"
+          value = "physio_admin"
+        }
+        env {
+          name  = "POSTGRES_DB"
+          value = google_sql_database.db.name
+        }
+        env {
+          name  = "POSTGRES_SOCKET_DIR"
+          value = "/cloudsql/${google_sql_database_instance.pg.connection_name}"
+        }
+        env {
+          name = "POSTGRES_PASSWORD"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.s["db-password"].secret_id
+              version = "latest"
+            }
+          }
+        }
+        env {
+          name = "APP_SECRET"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.s["app-secret"].secret_id
+              version = "latest"
+            }
+          }
+        }
+        env {
+          name = "JWT_SECRET_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.s["jwt-secret"].secret_id
+              version = "latest"
+            }
+          }
+        }
+        volume_mounts {
+          name       = "cloudsql"
+          mount_path = "/cloudsql"
+        }
+      }
+      volumes {
+        name = "cloudsql"
+        cloud_sql_instance {
+          instances = [google_sql_database_instance.pg.connection_name]
         }
       }
     }
@@ -288,13 +371,14 @@ resource "google_cloud_scheduler_job" "jobs" {
     uri         = "${google_cloud_run_v2_service.api.uri}${each.value.uri_path}"
     oidc_token {
       service_account_email = google_service_account.worker.email
-      audience              = google_cloud_run_v2_service.api.uri
+      audience              = "https://${local.p}-api"
     }
   }
   retry_config { retry_count = 3 }
 }
 
 output "api_url" { value = google_cloud_run_v2_service.api.uri }
+output "frontend_url" { value = google_cloud_run_v2_service.frontend.uri }
 output "cost_note" {
   value = "Estimate only: Cloud SQL db-f1-micro + scale-to-zero Cloud Run + low-volume Tasks/Scheduler approx USD 15-35/month. Verify in GCP pricing calculator; set a billing budget alert before apply (budgets are billing-account scoped)."
 }

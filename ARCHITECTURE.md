@@ -684,3 +684,11 @@ A dedicated Python worker daemon provides continuous background processing for c
 - **Secret Manager Environment Injection:** Cloud Run API service is wired directly to Google Secret Manager secret versions (`POSTGRES_PASSWORD`, `APP_SECRET`, `JWT_SECRET_KEY`, `AUTOMATION_WORKER_SECRET_TOKEN`) via `value_source.secret_key_ref`.
 - **Public vs. Protected Endpoints:** Cloud Run v2 services (`api`, `web`) grant `roles/run.invoker` to `allUsers` to permit public access for webhook delivery (Meta, YCloud) and browser frontend traffic. Private application endpoints are protected by FastAPI session cookies, CSRF tokens, RBAC dependencies, and HMAC signatures.
 - **Deterministic Scheduling Math:** `calculate_next_eligible_send_time` in `business_hours_service.py` supports `allow_past=True` for deterministic test math while preserving the production invariant that outbound automations are never scheduled in the past.
+
+---
+
+## Task 16 — Staging Deployment Architecture & Integration Hardening (2026-11-17)
+- **Universal Unix Socket URL Construction:** `backend/app/core/config.py` enhanced with `POSTGRES_SOCKET_DIR` and automatic `/cloudsql/...` path prefix detection. Generates uniform Unix domain socket query parameter URLs (`?host=/cloudsql/...`) for both asynchronous (`asyncpg`) and synchronous (`psycopg2`) SQLAlchemy engines.
+- **Connection Pool Tuning for Serverless Auto-Scaling:** `async_engine` and `sync_engine` in `backend/app/core/database.py` tuned for Cloud Run auto-scaling against `db-f1-micro` Cloud SQL (10 connection ceiling per container: `pool_size=5`, `max_overflow=5`, `pool_recycle=1800`, `pool_timeout=30`, `pool_pre_ping=True`).
+- **Acyclic Staging Dependency Graph:** Custom audience pattern (`custom_audiences = ["https://physio-staging-api"]`) decouples Cloud Run API deployment from Cloud Scheduler and Cloud Tasks OIDC token generation, eliminating cyclic dependencies in Terraform.
+- **Next.js Server-Side API Proxy:** Browser UI communicates via same-origin `/api/v1/:path*` rewrites handled by Next.js server-side reverse proxy to `INTERNAL_API_URL`, providing full third-party cookie isolation and eliminating CORS/CSRF friction in production.

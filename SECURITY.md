@@ -229,3 +229,20 @@ The platform handles patient communications, appointment schedules, and contact 
   - Cloud SQL configured with `ipv4_enabled = true` and zero authorized networks (all direct internet TCP connections blocked).
   - Cloud Run connects via managed Cloud SQL socket volume (`/cloudsql/<instance_connection_name>`) and Google IAM credentials (`roles/cloudsql.client`), eliminating the expensive Serverless VPC Access connector while preserving zero-trust access.
   - Cloud Run environment variables for sensitive settings (`POSTGRES_PASSWORD`, `APP_SECRET`, `JWT_SECRET_KEY`, `AUTOMATION_WORKER_SECRET_TOKEN`) wired to Secret Manager secret versions.
+
+---
+
+## Task 16 Security & Integration Verification (2026-11-17)
+
+- **Centralized Outbound Messaging Authorization Gate**:
+  - Remediated bypass in `OutboundDispatcher.dispatch_ai_reply`: previously only checked `settings.ai_mode == "live"`. Added an unconditional pre-flight check for `core_settings.AUTOMATION_OUTBOUND_ENABLED`. When `AUTOMATION_OUTBOUND_ENABLED=False`, automated AI dispatches are immediately blocked and logged.
+  - Confirmed that all automated message routes (AI receptionist, scheduled follow-ups, appointment reminders, and broadcast campaigns) respect the kill switch without bypass.
+- **OIDC Token Audience Verification & Custom Audiences**:
+  - Cloud Run API service is configured with `custom_audiences = ["https://physio-staging-api"]`.
+  - Cloud Scheduler and Cloud Tasks pass matching OIDC audiences.
+  - `require_worker_auth` strictly validates the token signature, audience, and worker service account email, eliminating circular URL references in Terraform while ensuring zero unauthorized calls.
+- **Setup & Bootstrap Endpoint Lockout**:
+  - Confirmed `setup_initial_owner` in `backend/app/services/auth_service.py` is permanently locked once an active Owner exists (`HTTP 403 Forbidden: System is already initialized with an active Owner`).
+- **Route Security Matrix Audit**:
+  - Full audit of all 14 API routers confirms that public access is restricted to `/health`, `/auth/login`, `/auth/setup-status`, `/auth/setup`, and HMAC-verified webhooks.
+  - All clinical, appointment, user, and configuration endpoints strictly enforce session authentication, CSRF tokens, and RBAC permissions.

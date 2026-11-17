@@ -280,6 +280,9 @@ async def test_4_live_mode_dispatch_and_idempotency(async_session: AsyncSession,
     # Mock provider adapter send
     from app.providers.meta import MetaCloudProvider
     from app.providers.base import OutboundSendResult
+    from app.core.config import settings as core_settings
+
+    monkeypatch.setattr(core_settings, "AUTOMATION_OUTBOUND_ENABLED", True)
 
     async def mock_send(self, to, text, preview_url=False):
         return OutboundSendResult(

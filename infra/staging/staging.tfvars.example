@@ -1,0 +1,9 @@
+# Example Staging Variables for Terraform
+# Copy to staging.tfvars and fill in your actual GCP staging values before running terraform plan.
+# Never commit staging.tfvars if it contains proprietary project IDs.
+
+project_id     = "YOUR_STAGING_PROJECT_ID"
+region         = "asia-south1"
+env            = "staging"
+api_image      = "asia-south1-docker.pkg.dev/YOUR_STAGING_PROJECT_ID/physio-staging/api:latest"
+frontend_image = "asia-south1-docker.pkg.dev/YOUR_STAGING_PROJECT_ID/physio-staging/frontend:latest"
