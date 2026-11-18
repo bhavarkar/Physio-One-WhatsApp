@@ -50,7 +50,7 @@ The complete infrastructure is declared in `infra/staging/main.tf` (17 top-level
 | **Cloud Run v2 IAM** | `api_public` & `frontend_public` | `roles/run.invoker` to `allUsers` for public webhook receipt and browser UI. |
 | **Cloud Run v2 Job (Migration)** | `physio-staging-db-migrate` | Dedicated migration runner (`alembic upgrade head`), 1 vCPU, 1 GiB RAM. Mounts Cloud SQL socket volume. Executed before API serves traffic. |
 | **Cloud Run v2 Job (Worker)** | `physio-staging-worker-once` | Bounded execution (`python -m app.workers.runner --once`), 1 vCPU, 1 GiB RAM. Mounts Cloud SQL socket volume. |
-| **Cloud Scheduler Jobs** | `physio-staging-*` (4 jobs) | `process-due` (*/5), `scan-inactivity` (*/15), `campaigns` (*/30 9-20), `inbound` (*/2). Asia/Kolkata timezone, OIDC Bearer tokens. |
+| **Cloud Scheduler Jobs** | `physio-staging-*` (4 jobs) | `process-due` (*/5), `scan-inactivity` (*/15), `campaigns` (*/30 9-20), `inbound` (*/2). Asia/Kolkata timezone, OIDC Bearer tokens. **Created PAUSED (`paused = true`) by default; activated only upon explicit Phase 11 operator gate.** |
 
 ---
 
@@ -111,91 +111,68 @@ Itemized cost projection in Google Cloud region `asia-south1`:
 | **Batch / Maintenance** | Manual / CLI | Cloud Run Job `physio-staging-worker-once` | OAuth 2.0 Token | Google Cloud Run Jobs REST API (`:run`) requires OAuth 2.0 access token with scope `cloud-platform` and IAM role `roles/run.invoker` or `roles/run.developer`. |
 | **Database Migration** | Pre-flight Bootstrap | Cloud Run Job `physio-staging-db-migrate` | Direct Job Execution | Runs `alembic upgrade head` over Cloud SQL Unix socket volume. |
 
+### 6.1 Database Credential Architecture & Residual Risk Disclosure
+
+#### A. Evaluation of IAM Database Authentication vs. Password-Based Bootstrap
+- **IAM Database Authentication (Cloud SQL for PostgreSQL):**
+  - Requires authenticating via short-lived OAuth 2.0 access tokens instead of static passwords.
+  - While supported natively by Google Cloud SQL, standard SQLAlchemy async/sync connection drivers (`asyncpg` and `psycopg2`) do NOT natively refresh IAM OAuth tokens without integrating the Google Cloud SQL Python Connector library (`google-cloud-sql-connector[asyncpg,psycopg2]`).
+  - Standard Alembic migration CLI invocations (`alembic upgrade head`) rely on a static `DATABASE_URL_SYNC` string in `alembic/env.py` and fail when using static strings with ephemeral IAM tokens.
+  - **Architectural Decision:** To avoid intrusive driver refactoring and preserve full compatibility with both local Docker Compose development and Cloud Run staging environments, the platform retains controlled password-based database user bootstrap.
+
+#### B. Controlled Password-Based Bootstrap Flow
+1. High-entropy database password (24+ bytes hexadecimal) is generated in memory.
+2. The password is piped directly via standard input into Google Secret Manager (`physio-staging-db-password`).
+3. User `physio_admin` is created on Cloud SQL out-of-band via `gcloud sql users create` directly using the Secret Manager password.
+4. Resource `google_sql_user` is completely excised from Terraform HCL, guaranteeing that the database password is NEVER serialized into `terraform.tfstate`.
+
+#### C. Explicit Residual Risk Disclosure
+1. **Secret Manager Exposure:** Anyone granted the IAM role `roles/secretmanager.secretAccessor` on the `physio-staging-db-password` secret can retrieve the database password in plaintext. *Mitigation:* `api_read` IAM binding grants access strictly to the dedicated service account `physio-staging-api`.
+2. **Process Argument Inspection:** Running CLI commands with inline `--password="..."` can expose credentials in OS process listings during execution. *Mitigation:* `scripts/deploy-staging.ps1` suppresses command echoing, uses standard input redirection where available, and displays `[REDACTED]` in all logs.
+3. **Password Rotation Protocol:** Rotating the Cloud SQL password requires executing `gcloud sql users set-password physio_admin --password="..."`, updating the Secret Manager version, and triggering a Cloud Run service revision restart.
+
 ---
 
-## 7. Staged Bootstrap Sequence (Resolves Dependency Cycles)
+## 7. Staged Bootstrap Sequence & Windows PowerShell Orchestrator
 
-To avoid circular dependencies between Secret containers, Secret versions, Docker images, and Cloud Run services:
+To eliminate cyclic dependencies, enforce the migration-before-ingress invariant, and ensure Schedulers remain paused by default, staging deployments are driven by the Windows-native PowerShell 5.1 runner: `scripts/deploy-staging.ps1`.
 
-```bash
-# ------------------------------------------------------------------------------
-# PHASE 1: Operator Authentication & Project Selection
-# ------------------------------------------------------------------------------
-export PROJECT_ID="YOUR_STAGING_PROJECT_ID"
-export REGION="asia-south1"
-export COMMIT=$(git rev-parse --short HEAD)
-export REPO="${REGION}-docker.pkg.dev/${PROJECT_ID}/physio-staging"
+### 7.1 Multi-Stage Deployment Phases & Checkpoints
 
-gcloud auth login
-gcloud auth application-default login
-gcloud config set project "$PROJECT_ID"
+| Phase | Phase Name | Actions & Checkpoints | Checkpoint Verification Criteria |
+|---|---|---|---|
+| **1** | `Preflight` | Verify Git branch, clean working tree, prerequisites (`git`, `terraform`, `docker`, `gcloud`), verify active GCP project and billing. | Active project matches target `ProjectId`; billing confirmed active. |
+| **2** | `Foundation` | Terraform apply targeted resources: APIs, Artifact Registry repo, Service Accounts (`api`, `worker`), Secret containers, and Secret IAM binding. | 8 APIs enabled, Docker registry created, 7 secret containers created. |
+| **3** | `BuildImages` | Multi-stage Docker build and push for `api` and `frontend` images to Artifact Registry. | Images exist in Artifact Registry; tags match Git commit SHA. |
+| **4** | `Secrets` | Generate high-entropy secrets in memory; populate versions for all 7 secrets in Secret Manager via standard input. | All 7 secret containers have at least one active version (`latest` resolves). Zero secrets in Git or tfstate. |
+| **5** | `Database` | Terraform apply Cloud SQL instance (`physio-staging-pg`), database (`physio_one_staging`), and Cloud Tasks queues. | Cloud SQL instance state is `RUNNABLE`; database created; 3 queues ready. |
+| **6** | `User` | Out-of-band Cloud SQL user creation: `gcloud sql users create physio_admin` using Secret Manager password. | User `physio_admin` exists in Cloud SQL. Password not in Terraform state. |
+| **7** | `Migration` | Terraform apply Cloud Run Job `physio-staging-db-migrate`; execute job via `gcloud run jobs execute --wait`. | Job completes with exit code 0; Alembic upgraded schema to `head` (008, 63 tables). **Enforced BEFORE application ingress.** |
+| **8** | `App` | Terraform apply Cloud Run services (`api`, `web`), public IAM invokers, and worker job (`worker_once`). Health check probes. | API `/health` returns HTTP 200 `healthy`; `/api/v1/auth/setup-status` returns `is_initialized: false`. |
+| **9** | `Schedulers` | Terraform apply Cloud Scheduler jobs (`jobs`). Jobs are declared and created in **PAUSED** state (`paused = true`). | All 4 scheduler jobs created in state `PAUSED`. Zero background automation active. |
+| **10** | `Reconcile` | Full `terraform plan` to reconcile entire state graph. | Plan exits with code 0 (0 to add, 0 to change, 0 to destroy). |
+| **11** | `ActivateSchedulers` | **Separate, Explicit Operator Gate.** Resumes Cloud Scheduler cron jobs only after manual clinic setup is complete. | Schedulers transitioned from `PAUSED` to `ENABLED`. |
 
-# ------------------------------------------------------------------------------
-# PHASE 2: Provision Foundation Infrastructure (APIs, Registry, IAM, Secret Containers)
-# ------------------------------------------------------------------------------
-cd infra/staging
-terraform init
-terraform apply \
-  -target=google_project_service.apis \
-  -target=google_artifact_registry_repository.repo \
-  -target=google_service_account.api \
-  -target=google_service_account.worker \
-  -target=google_secret_manager_secret.s \
-  -target=google_secret_manager_secret_iam_member.api_read \
-  -var="project_id=${PROJECT_ID}" \
-  -var="region=${REGION}" \
-  -var="api_image=${REPO}/api:${COMMIT}" \
-  -var="frontend_image=${REPO}/frontend:${COMMIT}"
+### 7.2 PowerShell 5.1 Deployment Commands
 
-# ------------------------------------------------------------------------------
-# PHASE 3: Build & Push Container Images to Artifact Registry
-# ------------------------------------------------------------------------------
-cd ../..
-gcloud auth configure-docker "${REGION}-docker.pkg.dev"
+```powershell
+# 1. Local Validation (No cloud calls, zero cost)
+powershell.exe -ExecutionPolicy Bypass -File scripts\deploy-staging.ps1 -Validate
 
-docker build -t "${REPO}/api:${COMMIT}" -f docker/Dockerfile.api .
-docker push "${REPO}/api:${COMMIT}"
+# 2. Complete Dry-Run Simulation (Prints all planned commands, zero cloud mutations)
+powershell.exe -ExecutionPolicy Bypass -File scripts\deploy-staging.ps1 -ProjectId "YOUR_STAGING_PROJECT_ID" -DryRun
 
-docker build -t "${REPO}/frontend:${COMMIT}" -f docker/Dockerfile.frontend .
-docker push "${REPO}/frontend:${COMMIT}"
+# 3. Targeted Phase Execution (Example: Foundation only)
+powershell.exe -ExecutionPolicy Bypass -File scripts\deploy-staging.ps1 -ProjectId "YOUR_STAGING_PROJECT_ID" -Phase Foundation
 
-# ------------------------------------------------------------------------------
-# PHASE 4: Populate Secret Versions Out-of-Band (Never in Terraform state)
-# ------------------------------------------------------------------------------
-DB_PASS=$(openssl rand -hex 16)
-echo -n "$DB_PASS" | gcloud secrets versions add physio-staging-db-password --data-file=-
-echo -n "$(openssl rand -hex 32)" | gcloud secrets versions add physio-staging-app-secret --data-file=-
-echo -n "$(openssl rand -hex 32)" | gcloud secrets versions add physio-staging-jwt-secret --data-file=-
-echo -n "$(openssl rand -hex 16)" | gcloud secrets versions add physio-staging-worker-token --data-file=-
-echo -n "staging-test-token" | gcloud secrets versions add physio-staging-whatsapp-token --data-file=-
-echo -n "staging-test-app-secret" | gcloud secrets versions add physio-staging-whatsapp-app-secret --data-file=-
-echo -n "staging-test-llm-key" | gcloud secrets versions add physio-staging-llm-key --data-file=-
+# 4. Full Deployment Execution (Prompts for explicit operator confirmation)
+powershell.exe -ExecutionPolicy Bypass -File scripts\deploy-staging.ps1 -ProjectId "YOUR_STAGING_PROJECT_ID" -Phase All
 
-# ------------------------------------------------------------------------------
-# PHASE 5: Provision Core Cloud SQL, Jobs, Cloud Run Services & Schedulers
-# ------------------------------------------------------------------------------
-cd infra/staging
-terraform plan \
-  -var="project_id=${PROJECT_ID}" \
-  -var="region=${REGION}" \
-  -var="db_tier=db-custom-1-3840" \
-  -var="api_image=${REPO}/api:${COMMIT}" \
-  -var="frontend_image=${REPO}/frontend:${COMMIT}" \
-  -out=staging.tfplan
+# 5. Full Plan Reconciliation
+powershell.exe -ExecutionPolicy Bypass -File scripts\deploy-staging.ps1 -ProjectId "YOUR_STAGING_PROJECT_ID" -Phase Reconcile -ShowPlan
 
-terraform apply staging.tfplan
-
-# Create Cloud SQL database user directly using Secret Manager password (zero credentials in tfstate)
-gcloud sql users create physio_admin \
-  --instance="physio-staging-pg" \
-  --password="$DB_PASS"
-
-# ------------------------------------------------------------------------------
-# PHASE 6: Execute Dedicated Migration Job Before Traffic Ingress
-# ------------------------------------------------------------------------------
-gcloud run jobs execute physio-staging-db-migrate \
-  --region="${REGION}" \
-  --wait
+# 6. Explicit Schedulers Activation Gate (Executed only after clinic setup is complete)
+powershell.exe -ExecutionPolicy Bypass -File scripts\deploy-staging.ps1 -ProjectId "YOUR_STAGING_PROJECT_ID" -Phase ActivateSchedulers
 ```
 
 ---
@@ -203,11 +180,12 @@ gcloud run jobs execute physio-staging-db-migrate \
 ## 8. Staging Isolation & Outbound Safeguards
 
 1. **Global Kill Switch:** `AUTOMATION_OUTBOUND_ENABLED=false` is enforced as the default Cloud Run environment variable.
-2. **Provider Mock Mode by Default:** `STAGING_MOCK_OUTBOUND=true` is enabled by default in staging. All outbound messages generate synthetic receipts with `mock_staging_*` IDs without contacting Meta or YCloud external APIs.
-3. **Fail-Closed Allowlist:** If mock mode is ever toggled off (`STAGING_MOCK_OUTBOUND=false`), `STAGING_ALLOWLIST_PHONE_NUMBERS` enforces a strict deny-all default. If the allowlist is empty `[]` or unconfigured, 100% of outbound messages are immediately rejected.
-4. **Appointments Read-Only Mode:** `APPOINTMENTS_READ_ONLY=true` blocks any booking or cancellation mutations in staging.
-5. **Campaigns Draft-Only Mode:** `CAMPAIGNS_DRAFT_ONLY=true` prevents campaigns from being scheduled or dispatched.
-6. **No Production Credential Fallback:** Fail-closed design ensures missing credentials result in clean errors rather than silent production failover.
+2. **Schedulers Created Paused:** All 4 Cloud Scheduler jobs are declared with `paused = true` in `infra/staging/main.tf`. Applying Terraform does NOT activate any cron triggers. Schedulers can only be resumed via explicit Phase 11 operator gate.
+3. **Provider Mock Mode by Default:** `STAGING_MOCK_OUTBOUND=true` is enabled by default in staging. All outbound messages generate synthetic receipts with `mock_staging_*` IDs without contacting Meta or YCloud external APIs.
+4. **Fail-Closed Allowlist:** If mock mode is ever toggled off (`STAGING_MOCK_OUTBOUND=false`), `STAGING_ALLOWLIST_PHONE_NUMBERS` enforces a strict deny-all default. If the allowlist is empty `[]` or unconfigured, 100% of outbound messages are immediately rejected.
+5. **Appointments Read-Only Mode:** `APPOINTMENTS_READ_ONLY=true` blocks any booking or cancellation mutations in staging.
+6. **Campaigns Draft-Only Mode:** `CAMPAIGNS_DRAFT_ONLY=true` prevents campaigns from being scheduled or dispatched.
+7. **No Production Credential Fallback:** Fail-closed design ensures missing credentials result in clean errors rather than silent production failover.
 
 ---
 

@@ -280,3 +280,19 @@ The platform handles patient communications, appointment schedules, and contact 
   - Confirmed 17 top-level resource blocks expanding via `for_each` to exactly 43 Google Cloud resource instances with strict acyclic dependencies.
 - **Disposable Database Migration Verification**:
   - Validated complete Alembic migration sequence (001 through 008) and rollback/re-upgrade cycle on a disposable PostgreSQL 16 database, confirming zero schema defects before staging deployment.
+
+---
+
+## Task 19 Deployment Orchestration & PowerShell Security Gates (2026-11-18)
+
+- **Cloud Scheduler Paused Invariant (`paused = true`)**:
+  - Enforced `paused = true` across all 4 Cloud Scheduler jobs in `infra/staging/main.tf`.
+  - Applying Terraform guarantees that cron triggers are created in a dormant `PAUSED` state. Resumption is strictly quarantined into a dedicated, authenticated Phase 11 operator gate (`-Phase ActivateSchedulers`).
+- **Database Credential Architecture & Residual Risk Disclosure**:
+  - Formally evaluated Google Cloud SQL IAM Database Authentication vs. password-based bootstrap. Because standard `asyncpg` and `psycopg2` drivers and Alembic CLI migrations do not natively refresh IAM tokens without custom driver interceptors, the platform retains controlled password-based bootstrap.
+  - Documented explicit residual risks: Secret Manager access control (mitigated by least-privilege `api_read` binding to `physio-staging-api`), process-argument exposure (mitigated via standard input and `[REDACTED]` log masking), and rotation lifecycles.
+- **Fail-Closed Project Validation & Billing Verification Gate**:
+  - Windows deployment runner (`scripts/deploy-staging.ps1`) enforces strict project synchronization: aborts immediately if the active gcloud project does not match `-ProjectId`.
+  - Verifies billing enablement on the target project before executing billable provisioning phases.
+- **Secret Redaction in Deployment Tooling & Automated Tests**:
+  - Automated tests in `backend/tests/test_staging_deployment_orchestration.py` verify that passwords and tokens are never printed in plain text, missing project IDs fail closed, and failed migrations halt downstream application traffic routing.

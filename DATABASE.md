@@ -233,3 +233,14 @@ Static audit: Alembic chain is linear `001→008`; migrations contain exactly 63
   - Applied full migration chain `001_initial_schema` $\rightarrow$ `008_campaigns_instagram_reengagement` (`alembic upgrade head`) cleanly from scratch.
   - Verified rollback and re-upgrade resilience: successfully downgraded to `007_scheduled_automation` and upgraded back to `008_campaigns_instagram_reengagement (head)`.
   - Confirmed all 63 tables, pgvector extensions, HNSW indexes, exclusion constraints, and VARCHAR(128) version table compatibility before safely dropping the disposable database.
+
+---
+
+## Task 19 Database Credential Architecture & Migration Enforcement (2026-11-18)
+
+- **IAM Database Authentication vs. Password-Based Bootstrap Analysis**:
+  - Evaluated Google Cloud SQL IAM database authentication for PostgreSQL. IAM auth replaces static passwords with short-lived OAuth 2.0 access tokens.
+  - However, SQLAlchemy `asyncpg` and `psycopg2` drivers do not natively fetch or refresh GCP IAM tokens without embedding the Google Cloud SQL Python Connector library (`google-cloud-sql-connector`). Furthermore, standard Alembic CLI commands (`alembic upgrade head`) require static connection strings in `alembic.ini` / `env.py`.
+  - To maintain zero-code-change parity between local Docker Compose development and Cloud Run staging environments, controlled password-based bootstrap is retained with explicit residual risk disclosure.
+- **Migration-Before-Ingress Invariant Enforced**:
+  - The 11-phase deployment orchestrator enforces execution of `physio-staging-db-migrate` in Phase 7, verifying exit code 0 and schema revision `008_campaigns_instagram_reengagement (head)` before Phase 8 deploys application containers and exposes ingress routes.

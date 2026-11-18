@@ -10,6 +10,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0-draft] - 2026-11-18
 
 ### Added
+- **Task 19: Correct Cloud Staging Bootstrap, Prepare Windows PowerShell Deployment & Final Release Gate**:
+  - **Windows PowerShell 5.1 Staging Deployment Tooling (`scripts/deploy-staging.ps1`)**:
+    - Authored native Windows PowerShell 5.1 runner enforcing the 11-phase acyclic deployment sequence (`Preflight` $\rightarrow$ `Foundation` $\rightarrow$ `BuildImages` $\rightarrow$ `Secrets` $\rightarrow$ `Database` $\rightarrow$ `User` $\rightarrow$ `Migration` $\rightarrow$ `App` $\rightarrow$ `Schedulers` $\rightarrow$ `Reconcile` $\rightarrow$ `ActivateSchedulers`).
+    - Added support for named parameters, `-DryRun`, `-Validate`, `-ShowPlan`, strict exit code checks, project mismatch fail-closed validation, billing verification, and automatic secret redaction (`[REDACTED]`).
+  - **Comprehensive Verification Runner (`scripts/verify-staging.ps1`)**:
+    - Created unified runner executing local validation (Git, backend pytest, frontend Jest, TypeScript, Next.js build, Terraform format/validate, Docker Compose) and optional read-only Google Cloud inspection.
+  - **Cloud Scheduler Paused Invariant**:
+    - Configured `paused = true` across all 4 Cloud Scheduler jobs in `infra/staging/main.tf` to prevent premature background cron execution upon initial Terraform apply. Quarantined scheduler resumption to explicit Phase 11 operator gate.
+  - **Migration-Before-Ingress Invariant Enforcement**:
+    - Formalized deployment dependency ordering: dedicated migration job (`physio-staging-db-migrate`) runs `alembic upgrade head` to completion in Phase 7 before Phase 8 deploys API and Frontend services and opens public traffic ingress.
+  - **Database Credential Architecture & Residual Risk Disclosure**:
+    - Evaluated Google Cloud SQL IAM database authentication vs password-based bootstrap. Retained controlled password bootstrap to preserve dialect parity across local Docker Compose and Cloud Run without requiring invasive asyncpg/psycopg2 driver interceptors. Fully documented residual risks and mitigations.
+  - **Automated Verification Test Suite**:
+    - Created `backend/tests/test_staging_deployment_orchestration.py` with 13 comprehensive tests covering phase ordering, project mismatch detection, billing validation, error fail-closed, secret redaction, and rollback safety.
+    - **Backend Test Suite:** 238 passed / 238 tests (100% pass rate in 60.02s).
+    - **Frontend Test Suite:** 53 passed / 53 tests (12 Jest suites in 24.00s).
+    - **TypeScript Compilation:** 0 errors (`tsc --noEmit`).
+    - **Next.js Production Build:** 18/18 static routes compiled cleanly.
+    - **Terraform Staging IaC:** 43 resources, formatted and valid (`terraform validate` exit 0).
+  - **Deployment Boundary Preserved**:
+    - Stopped at the Operator Approval Gate. Zero billable GCP resources created. Zero live WhatsApp messages sent.
+
 - **Task 18: Final Staging Security Gate, Terraform State Audit & Deployment Dry Run**:
   - **Absolute Zero-Secret Terraform State for Cloud SQL User**:
     - Excised `google_sql_user.user` entirely from `infra/staging/main.tf` because HashiCorp's Google Cloud Terraform provider schema mandates a `password` attribute for built-in PostgreSQL users. Omitting the resource prevents passwords from ever being written into `terraform.tfstate`.

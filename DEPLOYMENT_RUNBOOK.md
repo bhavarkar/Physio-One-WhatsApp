@@ -14,14 +14,16 @@
 > **Mandatory Rule:** Do **NOT** deploy to Google Cloud, run `terraform apply`, or create billable GCP resources without explicit operator sign-off and approval. Production credentials must never be used in staging, and no real WhatsApp messages may be dispatched to actual patients during staging verification.
 
 ### Pre-Deployment Checklist
-- [x] Backend tests pass: 225/225 tests passing (100% pass rate).
+- [x] Backend tests pass: 238/238 tests passing (100% pass rate).
 - [x] Frontend tests pass: 53/53 tests passing across 12 test suites.
 - [x] TypeScript typecheck: 0 errors (`tsc --noEmit`).
 - [x] Next.js production build: 18/18 static routes compiled cleanly.
 - [x] Docker Compose local verification: PostgreSQL 16 + pgvector, API, Worker, and Frontend operational.
 - [x] Terraform staging IaC validated and formatted (17 top-level resource blocks expanding to 43 resource instances, acyclic bootstrap).
 - [x] Safety defaults verified (`AUTOMATION_OUTBOUND_ENABLED=false`, `STAGING_MOCK_OUTBOUND=true`, fail-closed deny-all allowlist, AI Inbound disabled mode).
+- [x] Schedulers paused by default (`paused = true` declared in Terraform; activation restricted to Phase 11).
 - [x] Dedicated migration job declared (`physio-staging-db-migrate` running `alembic upgrade head`).
+- [x] Native Windows PowerShell 5.1 deployment runner (`scripts/deploy-staging.ps1`) and verification runner (`scripts/verify-staging.ps1`) verified.
 - [x] Connection budget verified for staging Cloud SQL tier (`db-custom-1-3840` / `db-f1-micro`).
 
 ---
@@ -122,34 +124,50 @@ docker push "${REPO}/frontend:${COMMIT}"
 
 ---
 
-## 5. Terraform Infrastructure Provisioning
+## 5. Automated Windows PowerShell 5.1 Deployment Runner
 
-Navigate to `infra/staging/`:
+For reliable, reproducible orchestration on Windows 11 / Windows PowerShell 5.1, use `scripts/deploy-staging.ps1`. The script enforces the 11-phase acyclic deployment sequence, verifies native command exit codes, checks for active GCP project synchronization, requires explicit confirmation before billable actions, and redacts all secrets from terminal logs.
 
-```bash
-cd infra/staging
+### 5.1 Syntax & Available Options
 
-# Initialize Terraform (remote backend bucket configured out-of-band)
-terraform init -backend-config="bucket=YOUR_TF_STATE_BUCKET"
-
-# Generate and review execution plan
-terraform plan \
-  -var="project_id=${PROJECT_ID}" \
-  -var="region=asia-south1" \
-  -var="env=staging" \
-  -var="api_image=${REPO}/api:${COMMIT}" \
-  -var="frontend_image=${REPO}/frontend:${COMMIT}" \
-  -out=staging.tfplan
-
-# Review the plan carefully: verify no destructive changes, zero public database IPs
-# Apply after explicit operator confirmation
-terraform apply staging.tfplan
-
-# Create Cloud SQL database user directly using Secret Manager password (zero credentials in tfstate)
-gcloud sql users create physio_admin \
-  --instance="physio-staging-pg" \
-  --password="$DB_PASS"
+```powershell
+# Usage:
+.\scripts\deploy-staging.ps1 -ProjectId YOUR_PROJECT_ID [-Region asia-south1] [-DbTier db-custom-1-3840] [-Phase PhaseName] [-DryRun] [-Validate] [-ShowPlan] [-Force]
 ```
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `-ProjectId` | String | *Mandatory* | Target Google Cloud project identifier. Validated against active gcloud config. |
+| `-Region` | String | `asia-south1` | Target GCP region. |
+| `-DbTier` | String | `db-custom-1-3840`| Cloud SQL instance machine tier. |
+| `-Phase` | String | `All` | Specific phase (`Preflight`, `Foundation`, `BuildImages`, `Secrets`, `Database`, `User`, `Migration`, `App`, `Schedulers`, `Reconcile`, `ActivateSchedulers`). |
+| `-DryRun` | Switch | `false` | Prints all planned operations and commands without executing mutating actions. |
+| `-Validate` | Switch | `false` | Validates local tools and Terraform syntax without requiring ProjectId or cloud access. |
+| `-ShowPlan` | Switch | `false` | Runs `terraform plan` and displays differences without applying. |
+| `-Force` | Switch | `false` | Bypasses the interactive operator confirmation prompt. |
+
+### 5.2 PowerShell Deployment Walkthrough
+
+```powershell
+# Step 1: Pre-flight Local Validation (Zero cost, no cloud calls)
+powershell.exe -ExecutionPolicy Bypass -File scripts\deploy-staging.ps1 -Validate
+
+# Step 2: Dry-Run Simulation (Displays full 11-phase sequence with redacted secrets)
+powershell.exe -ExecutionPolicy Bypass -File scripts\deploy-staging.ps1 -ProjectId "YOUR_STAGING_PROJECT_ID" -DryRun
+
+# Step 3: Execute Phases 1-10 (Full Staged Provisioning)
+powershell.exe -ExecutionPolicy Bypass -File scripts\deploy-staging.ps1 -ProjectId "YOUR_STAGING_PROJECT_ID" -Phase All
+
+# Step 4: Run Post-Deployment Verification
+powershell.exe -ExecutionPolicy Bypass -File scripts\verify-staging.ps1 -ProjectId "YOUR_STAGING_PROJECT_ID" -CloudCheck
+
+# Step 5: Resume Paused Cloud Schedulers (Separate Explicit Gate)
+powershell.exe -ExecutionPolicy Bypass -File scripts\deploy-staging.ps1 -ProjectId "YOUR_STAGING_PROJECT_ID" -Phase ActivateSchedulers
+```
+
+---
+
+## 6. Manual Staged CLI Reference (Bash / Cloud Shell)
 
 ---
 

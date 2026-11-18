@@ -460,6 +460,7 @@ resource "google_cloud_scheduler_job" "jobs" {
   schedule  = each.value.schedule
   time_zone = "Asia/Kolkata"
   region    = var.region
+  paused    = true # Safety Invariant: Schedulers are created PAUSED; activated only after explicit verification
   http_target {
     http_method = "POST"
     uri         = "${google_cloud_run_v2_service.api.uri}${each.value.uri_path}"
