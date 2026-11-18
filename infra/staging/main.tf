@@ -23,6 +23,11 @@ variable "env" {
   type    = string
   default = "staging"
 }
+variable "db_tier" {
+  type        = string
+  default     = "db-custom-1-3840"
+  description = "Cloud SQL tier. db-custom-1-3840 (1 vCPU, 3.75GB RAM, max 100 conns) is recommended for pgvector & staging workloads. Shared-core db-f1-micro is low-cost but limited to 25-50 connections."
+}
 variable "api_image" { type = string }
 variable "frontend_image" { type = string }
 
@@ -83,14 +88,14 @@ resource "google_secret_manager_secret_iam_member" "api_read" {
   member    = "serviceAccount:${google_service_account.api.email}"
 }
 
-# Cloud SQL: smallest staging tier; Cloud Run connects securely via Cloud SQL socket volume.
+# Cloud SQL: PostgreSQL 16 + pgvector; Cloud Run connects securely via Cloud SQL socket volume.
 resource "google_sql_database_instance" "pg" {
   name                = "${local.p}-pg"
   database_version    = "POSTGRES_16"
   region              = var.region
   deletion_protection = false
   settings {
-    tier              = "db-f1-micro"
+    tier              = var.db_tier
     availability_type = "ZONAL"
     disk_size         = 10
     ip_configuration {
@@ -109,10 +114,15 @@ resource "google_sql_database" "db" {
   name     = "physio_one_staging"
 }
 
+# Cloud SQL User bootstrap:
+# Password is intentionally managed out-of-band via Secret Manager and 'gcloud sql users set-password'
+# to prevent exposing the database password in plaintext inside terraform.tfstate.
 resource "google_sql_user" "user" {
   name     = "physio_admin"
   instance = google_sql_database_instance.pg.name
-  # Password managed out-of-band via Secret Manager (physio-staging-db-password).
+  lifecycle {
+    ignore_changes = [password]
+  }
 }
 # pgvector is enabled by migration 001 (CREATE EXTENSION vector).
 
@@ -187,6 +197,22 @@ resource "google_cloud_run_v2_service" "api" {
       env {
         name  = "POSTGRES_SOCKET_DIR"
         value = "/cloudsql/${google_sql_database_instance.pg.connection_name}"
+      }
+      env {
+        name  = "STAGING_MOCK_OUTBOUND"
+        value = "false"
+      }
+      env {
+        name  = "APPOINTMENTS_READ_ONLY"
+        value = "false"
+      }
+      env {
+        name  = "CAMPAIGNS_DRAFT_ONLY"
+        value = "false"
+      }
+      env {
+        name  = "DEFAULT_AI_INBOUND_MODE"
+        value = "disabled"
       }
       env {
         name = "POSTGRES_PASSWORD"
@@ -355,6 +381,79 @@ resource "google_cloud_run_v2_job" "worker_once" {
   }
 }
 
+# Dedicated Database Migration Job — runs 'alembic upgrade head' over Cloud SQL Unix socket.
+# Pre-flight requirement: Executed BEFORE API service begins serving traffic.
+resource "google_cloud_run_v2_job" "db_migrate" {
+  name     = "${local.p}-db-migrate"
+  location = var.region
+  template {
+    template {
+      service_account = google_service_account.api.email
+      containers {
+        image   = var.api_image
+        command = ["alembic", "upgrade", "head"]
+        resources {
+          limits = { cpu = "1", memory = "1Gi" }
+        }
+        env {
+          name  = "ENVIRONMENT"
+          value = "staging"
+        }
+        env {
+          name  = "POSTGRES_USER"
+          value = "physio_admin"
+        }
+        env {
+          name  = "POSTGRES_DB"
+          value = google_sql_database.db.name
+        }
+        env {
+          name  = "POSTGRES_SOCKET_DIR"
+          value = "/cloudsql/${google_sql_database_instance.pg.connection_name}"
+        }
+        env {
+          name = "POSTGRES_PASSWORD"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.s["db-password"].secret_id
+              version = "latest"
+            }
+          }
+        }
+        env {
+          name = "APP_SECRET"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.s["app-secret"].secret_id
+              version = "latest"
+            }
+          }
+        }
+        env {
+          name = "JWT_SECRET_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.s["jwt-secret"].secret_id
+              version = "latest"
+            }
+          }
+        }
+        volume_mounts {
+          name       = "cloudsql"
+          mount_path = "/cloudsql"
+        }
+      }
+      volumes {
+        name = "cloudsql"
+        cloud_sql_instance {
+          instances = [google_sql_database_instance.pg.connection_name]
+        }
+      }
+    }
+  }
+  depends_on = [google_sql_database.db, google_secret_manager_secret_iam_member.api_read]
+}
+
 resource "google_cloud_scheduler_job" "jobs" {
   for_each = {
     process-due     = { schedule = "*/5 * * * *", uri_path = "/api/v1/automations/process-due" }
@@ -379,6 +478,8 @@ resource "google_cloud_scheduler_job" "jobs" {
 
 output "api_url" { value = google_cloud_run_v2_service.api.uri }
 output "frontend_url" { value = google_cloud_run_v2_service.frontend.uri }
+output "migration_job_name" { value = google_cloud_run_v2_job.db_migrate.name }
+output "worker_job_name" { value = google_cloud_run_v2_job.worker_once.name }
 output "cost_note" {
-  value = "Estimate only: Cloud SQL db-f1-micro + scale-to-zero Cloud Run + low-volume Tasks/Scheduler approx USD 15-35/month. Verify in GCP pricing calculator; set a billing budget alert before apply (budgets are billing-account scoped)."
+  value = "Estimate only: Cloud SQL (db-custom-1-3840 ~$27.50/mo or db-f1-micro ~$10.50/mo) + scale-to-zero Cloud Run + low-volume Tasks/Scheduler approx USD 15-35/month. Verify in GCP pricing calculator; set a billing budget alert before apply (budgets are billing-account scoped)."
 }

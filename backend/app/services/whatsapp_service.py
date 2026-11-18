@@ -37,7 +37,9 @@ from app.providers.base import (
     MessageType,
     NormalizedInboundMessage,
     NormalizedStatusUpdate,
+    OutboundSendResult,
 )
+from app.core.config import settings
 from app.providers.factory import get_provider_adapter
 from app.providers.meta import clean_phone_number
 from app.core.crypto import encrypt_secret
@@ -260,8 +262,38 @@ async def send_outbound_text_message(
     adapter = get_provider_adapter(account)
     clean_to = clean_phone_number(to)
 
-    # 1. Send via provider
-    send_result = await adapter.send_text_message(to=clean_to, text=text, preview_url=preview_url)
+    # 1. Staging Safety Boundary & Mock Mode (Task 17 Phase F)
+    if settings.ENVIRONMENT in ("staging", "testing"):
+        if settings.STAGING_ALLOWLIST_PHONE_NUMBERS and clean_to not in settings.STAGING_ALLOWLIST_PHONE_NUMBERS:
+            logger.warning(
+                "Outbound message suppressed: recipient %s not in STAGING_ALLOWLIST_PHONE_NUMBERS (env=%s)",
+                clean_to,
+                settings.ENVIRONMENT,
+            )
+            return MessageSendResponse(
+                success=False,
+                status=MessageStatus.FAILED.value,
+                error=f"Recipient {clean_to} is not in the approved staging contact allowlist.",
+            )
+
+        if settings.STAGING_MOCK_OUTBOUND:
+            mock_provider_id = f"mock_staging_{uuid.uuid4().hex[:12]}"
+            logger.info(
+                "STAGING_MOCK_OUTBOUND active: simulating dispatch to %s (mock_id=%s)",
+                clean_to,
+                mock_provider_id,
+            )
+            send_result = OutboundSendResult(
+                success=True,
+                provider_message_id=mock_provider_id,
+                raw_response={"status": "simulated_staging", "recipient": clean_to},
+            )
+        else:
+            send_result = await adapter.send_text_message(to=clean_to, text=text, preview_url=preview_url)
+    else:
+        # Production / live provider dispatch
+        send_result = await adapter.send_text_message(to=clean_to, text=text, preview_url=preview_url)
+
     if not send_result.success:
         return MessageSendResponse(
             success=False,

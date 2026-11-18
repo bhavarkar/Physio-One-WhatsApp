@@ -14,13 +14,15 @@
 > **Mandatory Rule:** Do **NOT** deploy to Google Cloud, run `terraform apply`, or create billable GCP resources without explicit operator sign-off and approval. Production credentials must never be used in staging, and no real WhatsApp messages may be dispatched to actual patients during staging verification.
 
 ### Pre-Deployment Checklist
-- [x] Backend tests pass: 187/187 tests passing.
-- [x] Frontend tests pass: 53/53 tests passing.
-- [x] TypeScript typecheck: 0 errors.
-- [x] Next.js production build: 18/18 static routes compiled.
+- [x] Backend tests pass: 219/219 tests passing (100% pass rate).
+- [x] Frontend tests pass: 53/53 tests passing across 12 test suites.
+- [x] TypeScript typecheck: 0 errors (`tsc --noEmit`).
+- [x] Next.js production build: 18/18 static routes compiled cleanly.
 - [x] Docker Compose local verification: PostgreSQL 16 + pgvector, API, Worker, and Frontend operational.
-- [x] Terraform staging IaC validated and formatted.
-- [x] Safety defaults verified (`AUTOMATION_OUTBOUND_ENABLED=false`, AI Mode A read-only).
+- [x] Terraform staging IaC validated and formatted (27 resources, acyclic bootstrap).
+- [x] Safety defaults verified (`AUTOMATION_OUTBOUND_ENABLED=false`, AI Inbound disabled mode).
+- [x] Dedicated migration job declared (`physio-staging-db-migrate` running `alembic upgrade head`).
+- [x] Connection budget verified for staging Cloud SQL tier (`db-custom-1-3840` / `db-f1-micro`).
 
 ---
 
@@ -151,13 +153,13 @@ gcloud sql users set-password physio_admin \
 
 ---
 
-## 6. Database Migration Execution
+## 6. Dedicated Database Migration Execution
 
-Once Cloud SQL and Secret Manager are provisioned, execute database migrations using a one-shot Cloud Run Job or temporary migration container:
+Once Cloud SQL and Secret Manager are provisioned, execute database migrations using the dedicated Cloud Run migration job BEFORE the API starts serving traffic:
 
 ```bash
-# Execute migration using the Cloud Run worker job image
-gcloud run jobs execute physio-staging-worker-once \
+# Execute dedicated migration job running 'alembic upgrade head' over Cloud SQL Unix socket
+gcloud run jobs execute physio-staging-db-migrate \
   --region=asia-south1 \
   --wait
 

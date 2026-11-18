@@ -28,6 +28,7 @@ from app.services.business_hours_service import (
     calculate_next_eligible_send_time,
 )
 from app.services.template_service import TemplateService
+from app.core.config import settings as core_settings
 
 logger = logging.getLogger("physio_one.automation.eligibility")
 

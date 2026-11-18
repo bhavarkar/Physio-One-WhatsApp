@@ -681,6 +681,9 @@ class CampaignService:
         if not campaign:
             raise ValueError("Campaign not found.")
 
+        if app_settings.CAMPAIGNS_DRAFT_ONLY:
+            raise ValueError("Scheduling campaigns is disabled: system is in draft-only mode (CAMPAIGNS_DRAFT_ONLY=true).")
+
         if not campaign.is_approved or campaign.approved_version != campaign.current_version:
             raise ValueError("Campaign must be approved by Owner/Admin before scheduling.")
 

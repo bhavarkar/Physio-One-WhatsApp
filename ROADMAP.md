@@ -42,9 +42,10 @@ Each phase corresponds to discrete tasks defined in `PRD.md`:
 - **Task 13**: Production Readiness, Security Hardening & End-to-End Integration [COMPLETED]
 - **Task 14**: Staging Infrastructure, Container Verification & PostgreSQL Validation [COMPLETED]
 - **Task 15**: Production Security Hardening, Cloud Staging Preflight & Deployment Approval Gate [COMPLETED]
-- **Task 16**: Google Cloud Staging Deployment Readiness, Integration Verification & Approval Gate [COMPLETED - STANDING BY AT APPROVAL GATE]
+- **Task 16**: Google Cloud Staging Deployment Readiness, Integration Verification & Approval Gate [COMPLETED]
+- **Task 17**: Resolve Staging Deployment Blockers and Prepare a Safe Google Cloud Launch [COMPLETED - STANDING BY AT APPROVAL GATE]
 
 ---
 
-## Task 16 Status (2026-11-17)
-Staging deployment dry-run and integration verification complete. Zero cloud resources created. Standing by at the Task 16 Operator Approval Gate (`STAGING_DEPLOYMENT_APPROVAL.md`). Cloud provisioning pending explicit operator sign-off.
+## Task 17 Status (2026-11-18)
+Staging deployment blockers fully resolved and verified across 219 backend tests (100% pass rate), 53 frontend tests, 0 TypeScript errors, 18 Next.js static routes, and running Docker containers. Staged 6-phase bootstrap sequence, dedicated migration job (`physio-staging-db-migrate`), connection budget calculator, and zero-secret Terraform state for Cloud SQL user implemented. Standing by at the Task 17 Operator Approval Gate (`STAGING_DEPLOYMENT_APPROVAL.md`). Cloud provisioning strictly pending explicit operator sign-off. Zero billable GCP resources created. Zero real WhatsApp messages sent.

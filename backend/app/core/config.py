@@ -117,6 +117,53 @@ class Settings(BaseSettings):
     CLOUD_TASKS_CAMPAIGN_QUEUE: str = "physio-campaigns"
     WORKER_BASE_URL: Optional[str] = None  # public Cloud Run API URL tasks POST to
 
+    # Staging Isolation & Outbound Safeguards (Task 17)
+    STAGING_ALLOWLIST_PHONE_NUMBERS: List[str] = []
+    STAGING_MOCK_OUTBOUND: bool = False
+    APPOINTMENTS_READ_ONLY: bool = False
+    CAMPAIGNS_DRAFT_ONLY: bool = False
+    DEFAULT_AI_INBOUND_MODE: str = "disabled"
+
+
+def calculate_connection_budget(
+    api_instances: int = 3,
+    api_pool_size: int = 5,
+    api_max_overflow: int = 5,
+    worker_job_instances: int = 1,
+    worker_pool_size: int = 2,
+    worker_max_overflow: int = 1,
+    migration_connections: int = 1,
+    admin_connections: int = 5,
+    db_tier: str = "db-custom-1-3840",
+) -> dict:
+    """Calculate maximum potential concurrent PostgreSQL connections across all system components.
+
+    Verifies that total concurrent connections stay safely within the Cloud SQL tier's max_connections ceiling.
+    """
+    tier_limits = {
+        "db-f1-micro": 25,
+        "db-g1-small": 50,
+        "db-custom-1-3840": 100,
+        "db-custom-2-7680": 200,
+    }
+    max_tier_conns = tier_limits.get(db_tier, 100)
+    api_max = api_instances * (api_pool_size + api_max_overflow)
+    worker_max = worker_job_instances * (worker_pool_size + worker_max_overflow)
+    total = api_max + worker_max + migration_connections + admin_connections
+    headroom = max_tier_conns - total
+    is_safe = headroom >= 0
+    return {
+        "db_tier": db_tier,
+        "tier_max_connections": max_tier_conns,
+        "api_max_connections": api_max,
+        "worker_max_connections": worker_max,
+        "migration_connections": migration_connections,
+        "admin_connections": admin_connections,
+        "total_peak_connections": total,
+        "headroom": headroom,
+        "is_safe": is_safe,
+    }
+
 
 settings = Settings()
 

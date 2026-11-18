@@ -246,3 +246,19 @@ The platform handles patient communications, appointment schedules, and contact 
 - **Route Security Matrix Audit**:
   - Full audit of all 14 API routers confirms that public access is restricted to `/health`, `/auth/login`, `/auth/setup-status`, `/auth/setup`, and HMAC-verified webhooks.
   - All clinical, appointment, user, and configuration endpoints strictly enforce session authentication, CSRF tokens, and RBAC permissions.
+
+---
+
+## Task 17 Security & Deployment Remediation (2026-11-18)
+
+- **Zero-Secret Terraform State for Cloud SQL User**:
+  - Remediated potential secret exposure where managing `google_sql_user` with password parameters saves plaintext credentials into `terraform.tfstate`. Configured `google_sql_user.user` with `lifecycle { ignore_changes = [password] }` and documented out-of-band password management via Secret Manager and `gcloud sql users set-password`.
+- **Dedicated Cloud Run Migration Job Security Boundary**:
+  - Schema migrations are decoupled from application container startup and background worker execution. Job `physio-staging-db-migrate` executes `alembic upgrade head` under runtime identity `physio-staging-api` over the Cloud SQL Unix socket with least-privilege database user credentials, exiting immediately upon completion.
+- **WhatsApp Staging Isolation & Synthetic Contact Allowlist**:
+  - Outbound messaging gateway in `whatsapp_service.py` enforces `STAGING_ALLOWLIST_PHONE_NUMBERS`. Any attempt in staging or testing to dispatch to a non-allowlisted number is immediately halted with a 403/rejection error.
+  - `STAGING_MOCK_OUTBOUND` mode enables full end-to-end webhook-to-response simulation without making external network calls to Meta or YCloud.
+  - Read-only appointment guard (`APPOINTMENTS_READ_ONLY`) and draft-only campaign guard (`CAMPAIGNS_DRAFT_ONLY`) provide defense-in-depth against accidental data modifications or unintended outreach during staging validation.
+- **Worker Authentication Formalization**:
+  - Verified that Cloud Tasks and Cloud Scheduler requests targeting worker HTTP endpoints require valid Google OIDC ID tokens matching audience `https://physio-staging-api` and service account `physio-staging-worker`.
+  - Contrasted with GCP Cloud Run Jobs execution REST API which requires Google OAuth 2.0 access tokens (`https://www.googleapis.com/auth/cloud-platform`).

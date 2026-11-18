@@ -204,3 +204,19 @@ Static audit: Alembic chain is linear `001→008`; migrations contain exactly 63
   - Standard Alembic hardcodes `Column("version_num", String(32))` in `DefaultImpl.version_table_impl`.
   - Revisions `002_appointment_history_and_rules` (35 chars) and `008_campaigns_instagram_reengagement` (38 chars) exceed 32 characters, which caused `StringDataRightTruncation` on PostgreSQL.
   - Patched `backend/alembic/env.py` with `_version_table_impl` setting `String(128)` and added an online migration hook ensuring `alembic_version` table uses `VARCHAR(128)`.
+
+---
+
+## Task 17 Cloud SQL Architecture & Connection Sizing (2026-11-18)
+
+- **Dedicated Migration Runner Job:**
+  - In Cloud Run, database migrations are separated from the API service and executed as a dedicated Cloud Run Job `physio-staging-db-migrate`.
+  - The job runs `alembic upgrade head` over the Cloud SQL Unix socket (`/cloudsql/<connection_name>`) using `POSTGRES_USER=physio_admin` and Secret Manager credentials.
+  - In `alembic/env.py`, `pool.NullPool` is used during migrations to avoid retaining persistent idle connections.
+- **Connection Budget & Tier Sizing Analysis:**
+  - **Standard Tier (`db-custom-1-3840`):** 1 vCPU, 3.75 GB RAM, `max_connections = 100`. Peak system load across 3 API instances ($3 \times 10 = 30$), worker jobs ($1 \times 3 = 3$), migration runner (1), and admin/internal connections (5) totals 39 connections, providing 61 connections of headroom. Recommended for pgvector vector operations.
+  - **Shared-Core Tier (`db-f1-micro`):** 1 shared vCPU, 0.6 GB RAM, `max_connections = 25`. If selected for cost-sensitive testing, API containers must be configured with `POSTGRES_POOL_SIZE=2` and `POSTGRES_MAX_OVERFLOW=2` ($3 \times 4 + 1 + 1 + 5 = 19 \le 25$).
+  - Added programmatic validator `calculate_connection_budget` in `backend/app/core/config.py` with full unit test coverage.
+- **Zero-Secret User Management:**
+  - `google_sql_user.user` in `infra/staging/main.tf` defines user `physio_admin` with `lifecycle { ignore_changes = [password] }`.
+  - Passwords are set out-of-band using `gcloud sql users set-password` from Secret Manager, ensuring zero database credentials leak into `terraform.tfstate`.

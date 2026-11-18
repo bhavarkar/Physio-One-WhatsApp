@@ -322,6 +322,12 @@ class AppointmentService:
         ip_address: Optional[str] = None,
     ) -> Appointment:
         """Create a new appointment with concurrency lock, overlap check, and Sunday validation."""
+        if settings.APPOINTMENTS_READ_ONLY:
+            raise AppointmentServiceError(
+                code="APPOINTMENTS_READ_ONLY",
+                message="Appointment mutations are disabled: system is in read-only mode (APPOINTMENTS_READ_ONLY=true).",
+            )
+
         start_utc = normalize_to_utc(data.start_time)
         end_utc = start_utc + timedelta(minutes=data.duration_minutes)
 

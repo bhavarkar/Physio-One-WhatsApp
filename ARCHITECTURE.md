@@ -692,3 +692,17 @@ A dedicated Python worker daemon provides continuous background processing for c
 - **Connection Pool Tuning for Serverless Auto-Scaling:** `async_engine` and `sync_engine` in `backend/app/core/database.py` tuned for Cloud Run auto-scaling against `db-f1-micro` Cloud SQL (10 connection ceiling per container: `pool_size=5`, `max_overflow=5`, `pool_recycle=1800`, `pool_timeout=30`, `pool_pre_ping=True`).
 - **Acyclic Staging Dependency Graph:** Custom audience pattern (`custom_audiences = ["https://physio-staging-api"]`) decouples Cloud Run API deployment from Cloud Scheduler and Cloud Tasks OIDC token generation, eliminating cyclic dependencies in Terraform.
 - **Next.js Server-Side API Proxy:** Browser UI communicates via same-origin `/api/v1/:path*` rewrites handled by Next.js server-side reverse proxy to `INTERNAL_API_URL`, providing full third-party cookie isolation and eliminating CORS/CSRF friction in production.
+
+---
+
+## Task 17 — Deployment Blockers Remediation & Staged Launch Architecture (2026-11-18)
+- **Dedicated Cloud Run Migration Job (`physio-staging-db-migrate`):** Replaces ambiguous worker invocation with an explicit one-shot job running `alembic upgrade head` over the Cloud SQL Unix socket volume. Guarantees schema upgrades run to completion before the API service begins serving traffic.
+- **Acyclic Staged Bootstrap Sequence:** Resolved the bootstrap dependency loop (APIs $\rightarrow$ Secret containers $\rightarrow$ Container images $\rightarrow$ Secret versions $\rightarrow$ Cloud Run / Cloud SQL) by defining a 6-phase deployment protocol in `STAGING_DEPLOYMENT_APPROVAL.md`.
+- **Zero-Secret Terraform State for Cloud SQL User:** `google_sql_user.user` configured with `lifecycle { ignore_changes = [password] }`. Password is populated out-of-band via Secret Manager and `gcloud sql users set-password`, preventing plaintext credential leakage into `terraform.tfstate`.
+- **Cloud SQL Machine Tier Sizing & Connection Budget:** Documented `db-custom-1-3840` (1 vCPU, 3.75 GB RAM, 100 max connections) as the recommended staging tier for pgvector, with a total system peak of 39 connections and 61 headroom. Added a formal `calculate_connection_budget` validator in `backend/app/core/config.py`.
+- **Multi-Workflow Worker Execution Separation:** Formalized target and authentication mapping:
+  - Event-driven tasks: Cloud Tasks $\rightarrow$ Cloud Run API endpoint (HTTP POST with Google-signed OIDC token).
+  - Periodic sweeps: Cloud Scheduler $\rightarrow$ Cloud Run API endpoint (HTTP POST with Google-signed OIDC token).
+  - Maintenance jobs: Cloud Run Jobs execution (Google Cloud Run API with OAuth 2.0 access token).
+  - Database schema: Cloud Run dedicated migration job (`physio-staging-db-migrate`).
+- **WhatsApp Staging Isolation & Mock Boundaries:** Implemented synthetic contact allowlist (`STAGING_ALLOWLIST_PHONE_NUMBERS`), staging mock mode (`STAGING_MOCK_OUTBOUND`), read-only appointments (`APPOINTMENTS_READ_ONLY`), and draft-only campaigns (`CAMPAIGNS_DRAFT_ONLY`) at the final messaging gateway boundary in `whatsapp_service.py`.

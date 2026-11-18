@@ -99,5 +99,6 @@ In Google Cloud Run environments:
 - Service deployments create immutable, versioned Revisions (e.g. `physio-staging-api-00002-abc`).
 - Zero-downtime rolling traffic shift: traffic shifts to the new revision only after container startup probes (`/health`) pass.
 - Instant rollback: traffic can be routed back to the prior stable revision in under 5 seconds via `gcloud run services update-traffic --to-revisions=PREV_REV=100`.
+- Dedicated Database Migration Job (`physio-staging-db-migrate`): Runs `alembic upgrade head` as an isolated one-shot job over the Cloud SQL Unix socket before traffic shifts to the new revision, guaranteeing zero-downtime schema evolution.
 - Bounded workers execute via Cloud Run Jobs (`physio-staging-worker-once`) without running persistent idle containers.
 

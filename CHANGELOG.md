@@ -7,9 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.0-draft] - 2026-11-17
+## [1.0.0-draft] - 2026-11-18
 
 ### Added
+- **Task 17: Resolve Staging Deployment Blockers and Prepare a Safe Google Cloud Launch**:
+  - **Dedicated Database Migration Cloud Run Job (`physio-staging-db-migrate`)**:
+    - Declared dedicated `google_cloud_run_v2_job.db_migrate` in `infra/staging/main.tf` executing `["alembic", "upgrade", "head"]` over the Cloud SQL Unix socket volume (`/cloudsql/<connection_name>`) with least-privilege credentials.
+    - Resolves ambiguity where prior documentation pointed to worker polling commands (`app.workers.runner --once`) instead of executing Alembic migrations.
+    - Verified migration chain `001→008` live against PostgreSQL 16 container, confirming head revision `008_campaigns_instagram_reengagement` across 63 tables.
+  - **Acyclic Staged Bootstrap Sequence**:
+    - Re-engineered the bootstrap sequence in `STAGING_DEPLOYMENT_APPROVAL.md` into 6 clear phases, eliminating the dependency cycle where Secret Manager versions and container images were previously expected before Terraform created their underlying resource containers.
+  - **Zero-Secret Terraform State for Cloud SQL User**:
+    - Configured `google_sql_user.user` with `lifecycle { ignore_changes = [password] }` to ensure database user passwords are set out-of-band via Secret Manager and `gcloud sql users set-password`, preventing plaintext credential leakage into `terraform.tfstate`.
+  - **Cloud SQL Machine Tier Sizing & Connection Budget**:
+    - Added configurable `var.db_tier` in `infra/staging/main.tf` with default `db-custom-1-3840` (1 vCPU, 3.75 GB RAM, 100 max connections) as recommended for pgvector staging.
+    - Implemented `calculate_connection_budget` validator in `backend/app/core/config.py` confirming system peak of 39 connections and 61 headroom on standard tier, with container pool sizing rules (`pool_size=2`, `max_overflow=2`) for low-cost `db-f1-micro` tier.
+  - **Worker Execution Architecture Separation**:
+    - Disambiguated execution targets: Cloud Tasks (OIDC) $\rightarrow$ event-driven endpoints; Cloud Scheduler (OIDC) $\rightarrow$ periodic cron endpoints; Cloud Run Jobs (OAuth 2.0 access token) $\rightarrow$ batch maintenance; Dedicated Job $\rightarrow$ schema migrations.
+  - **WhatsApp Staging Isolation & Outbound Safeguards**:
+    - Enforced synthetic contact allowlist (`STAGING_ALLOWLIST_PHONE_NUMBERS`) in `whatsapp_service.py` to suppress accidental dispatches to real patients.
+    - Added provider mock simulation mode (`STAGING_MOCK_OUTBOUND`) enabling full E2E flow testing without calling external Meta or YCloud network APIs.
+    - Added appointments read-only mode (`APPOINTMENTS_READ_ONLY`) and campaigns draft-only mode (`CAMPAIGNS_DRAFT_ONLY`) for non-destructive staging operation.
+  - **Automated Verification Test Suite**:
+    - Created `backend/tests/test_staging_deployment_blockers_remediation.py` with 12 new targeted unit and integration tests.
+    - **Backend Test Suite:** 219 passed / 219 tests (100% pass rate in 90s).
+    - **Frontend Test Suite:** 53 passed / 53 tests (12 Jest suites in 36s).
+    - **TypeScript Compilation:** 0 errors (`tsc --noEmit`).
+    - **Next.js Production Build:** 18/18 static routes compiled cleanly.
+    - **Terraform Staging IaC:** 27 resources, formatted and valid (`terraform validate` exit 0).
+  - **Deployment Boundary Preserved**:
+    - Stopped at the Operator Approval Gate. Zero billable GCP resources created. Zero live WhatsApp messages sent.
+
 - **Task 16: Google Cloud Staging Deployment Readiness, Integration Verification & Approval Gate**:
   - **Cloud SQL Connection Architecture Audit & Fixes**:
     - Enhanced `backend/app/core/config.py` with `POSTGRES_SOCKET_DIR` and automatic socket path detection (`/cloudsql/...`), uniformly generating Unix domain socket query parameter URLs for both `asyncpg` (`postgresql+asyncpg://...`) and `psycopg2` (`postgresql+psycopg2://...`).
