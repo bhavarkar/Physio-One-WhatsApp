@@ -333,3 +333,24 @@ The platform handles patient communications, appointment schedules, and contact 
     - `APPOINTMENTS_READ_ONLY=true`: Blocks autonomous appointment mutations.
     - `CAMPAIGNS_DRAFT_ONLY=true`: Forces all campaigns into draft status.
     - `STAGING_ALLOWLIST_PHONE_NUMBERS=[]`: Enforces fail-closed deny-all default allowlist.
+
+---
+
+## Task 21 Security Audit, Concurrency Verification & Preflight Safety (2026-11-18)
+
+- **Local Integration Rehearsal Security Audit**:
+  - Validated that port 5432 has zero public host port bindings during Docker Compose execution.
+  - Inspected runtime container boundaries: `physio_vps_rehearsal_postgres`, `_api`, `_worker`, and `_frontend` remain unexposed; only Caddy binds ports 80/443.
+  - Confirmed non-root execution inside container images (`appuser` UID 10001 for API/worker, `nextjs` UID 1001 for frontend).
+  - Verified that secret tokens (`APP_SECRET`, `JWT_SECRET_KEY`, `POSTGRES_PASSWORD`, `AUTOMATION_WORKER_SECRET_TOKEN`) are never logged in plain text.
+- **Worker Authentication & Timing Attack Defense**:
+  - Re-verified that worker endpoints evaluate `X-Worker-Token` using `secrets.compare_digest` (constant-time comparison), mitigating timing-attack side channels.
+- **Staging Outbound Fail-Closed Verification**:
+  - Confirmed via live synthetic job test on the rehearsal stack that outbound dispatches are actively blocked with `kill_switch_disabled` and mock provider active.
+  - Guaranteed zero live Meta WhatsApp, YCloud, or LLM external API calls during testing and staging.
+- **Race Condition & Double-Dispatch Security**:
+  - Implemented `.with_for_update(skip_locked=True)` on background job queues (automations, debounced inbound messages, campaign dispatches) to guarantee that concurrent workers cannot double-claim or double-dispatch messages.
+  - Verified quiet-hour enforcement (21:00 to 09:00 IST) defers messages until business hours, avoiding unsolicited nocturnal patient messaging.
+- **Read-Only Preflight Security Checklist**:
+  - Authored `deploy/vps/HOSTINGER_PREFLIGHT_CHECKLIST.md` specifying non-mutating diagnostics for server inspection, ensuring no accidental deletion or disruption of existing VPS workloads during initial reconnaissance.
+

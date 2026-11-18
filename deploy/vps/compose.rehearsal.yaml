@@ -1,0 +1,64 @@
+# ==============================================================================
+# Physio One WhatsApp AI Platform — Disposable Local Rehearsal Compose Overlay
+# Strictly disposable volumes, local HTTP port routing, synthetic credentials.
+# ==============================================================================
+name: physio_vps_rehearsal
+
+services:
+  caddy:
+    container_name: physio_vps_rehearsal_caddy
+    environment:
+      - DOMAIN_NAME=:80
+    ports:
+      - "80:80"
+
+  frontend:
+    container_name: physio_vps_rehearsal_frontend
+    environment:
+      - NODE_ENV=production
+      - INTERNAL_API_URL=http://api:8000
+      - NEXT_PUBLIC_API_URL=http://localhost
+
+  api:
+    container_name: physio_vps_rehearsal_api
+    environment:
+      - ENVIRONMENT=staging
+      - STAGING_MOCK_OUTBOUND=true
+      - AUTOMATION_OUTBOUND_ENABLED=false
+      - DEFAULT_AI_INBOUND_MODE=disabled
+      - APPOINTMENTS_READ_ONLY=true
+      - CAMPAIGNS_DRAFT_ONLY=true
+      - STAGING_ALLOWLIST_PHONE_NUMBERS=[]
+
+  worker:
+    container_name: physio_vps_rehearsal_worker
+    environment:
+      - ENVIRONMENT=staging
+      - STAGING_MOCK_OUTBOUND=true
+      - AUTOMATION_OUTBOUND_ENABLED=false
+      - DEFAULT_AI_INBOUND_MODE=disabled
+      - APPOINTMENTS_READ_ONLY=true
+      - CAMPAIGNS_DRAFT_ONLY=true
+      - STAGING_ALLOWLIST_PHONE_NUMBERS=[]
+
+  postgres:
+    container_name: physio_vps_rehearsal_postgres
+
+  migration:
+    container_name: physio_vps_rehearsal_migration
+    environment:
+      - ENVIRONMENT=staging
+
+volumes:
+  postgres_data:
+    name: physio_vps_rehearsal_postgres_data
+  media_storage:
+    name: physio_vps_rehearsal_media_storage
+  caddy_data:
+    name: physio_vps_rehearsal_caddy_data
+  caddy_config:
+    name: physio_vps_rehearsal_caddy_config
+
+networks:
+  physio_vps_network:
+    name: physio_vps_rehearsal_network

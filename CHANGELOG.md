@@ -10,6 +10,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0-draft] - 2026-11-18
 
 ### Added
+- **Task 21: Hostinger VPS Local Integration Rehearsal, Security Audit & Deployment Approval Gate**:
+  - **Disposable Multi-Container Rehearsal Stack**:
+    - Rehearsed complete VPS Docker Compose architecture using `compose.rehearsal.yaml` on isolated network `physio_vps_rehearsal_network` and ephemeral volumes (`physio_vps_rehearsal_*`).
+    - Verified startup of all 5 container services: `postgres` (with `vector 0.8.7`), `api` (FastAPI healthy), `worker` (runner daemon), `frontend` (Next.js SSR), and `caddy` (port 80 reverse proxy).
+    - Verified that database state and 64 public tables persisted across container restarts.
+  - **Queue Concurrency Hardening & Reliability Tests**:
+    - Added row-level atomic locking with `.with_for_update(skip_locked=True)` in `AutomationWorkerService` (`automation_worker.py`), `InboundQueueService` (`inbound_queue.py`), and `CampaignService` (`campaign_service.py`), eliminating race hazards across parallel workers.
+    - Authored comprehensive integration test suite `backend/tests/test_vps_queue_concurrency_and_reliability.py` with 7 passing tests covering concurrent claiming isolation, lease expiration recovery, debounced locking, retry backoff limits, campaign concurrency, quiet hours deferral (21:00–09:00 IST), and dispatch idempotency.
+  - **Backup & Disaster Recovery Verification**:
+    - Validated streaming `pg_dump` with gzip compression and verified archive integrity with `gzip -t`.
+    - Executed live database restoration into a clean test database, verifying all 64 tables and pgvector extension (0.8.7) restored identically.
+  - **Live Container Resource Measurements**:
+    - Measured live idle memory consumption: Total **323 MiB** across 5 containers (`postgres`: 66.5 MiB, `api`: 91.6 MiB, `worker`: 93.3 MiB, `frontend`: 58.6 MiB, `caddy`: 13.1 MiB).
+    - Confirmed 2.4 GB hard container limit allocation leaves ~1.6 GB headroom on the 4 GB Hostinger VPS.
+  - **Operational Script Dry-Run Hardening**:
+    - Hardened `--dry-run` modes in `deploy/vps/scripts/backup.sh` and `migrate.sh` to prevent dependency on active containers during dry-runs.
+    - Validated bash syntax across all 7 operational scripts using `bash -n`.
+  - **Hostinger VPS Read-Only Preflight Inspection**:
+    - Authored `deploy/vps/HOSTINGER_PREFLIGHT_CHECKLIST.md` documenting non-mutating inspection commands for Task 22 preflight.
+
 - **Task 20: Migrate Cloud Run Deployment Architecture to Hostinger Ubuntu VPS (Docker Compose)**:
   - **Hostinger Ubuntu Linux VPS Docker Compose Stack (`deploy/vps/compose.yaml` & `deploy/vps/compose.staging.yaml`)**:
     - Migrated deployment target from Google Cloud Run staging to a lightweight Docker Compose multi-container stack engineered for an existing Hostinger Ubuntu Linux VPS (Ubuntu 22.04/24.04 LTS, 4 GB RAM, 50 GB SSD).

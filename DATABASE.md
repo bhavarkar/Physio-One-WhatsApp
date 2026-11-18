@@ -276,3 +276,29 @@ Static audit: Alembic chain is linear `001→008`; migrations contain exactly 63
   - `deploy/vps/scripts/restore.sh`: Validates gzip integrity (`gzip -t`), enforces an explicit operator confirmation flag (`--confirm-restore`), terminates active database connections, streams decompressed SQL into `psql`, and verifies schema integrity ($\ge 63$ tables present).
 - **Data Protection Invariant**:
   - Automatic database down-migrations are strictly prohibited in `deploy/vps/scripts/rollback.sh`. If a deployment fails, containers are reverted to previous images while the database remains forward-compatible.
+
+---
+
+## Task 21 PostgreSQL Queue Concurrency Hardening & Rehearsal Verification (2026-11-18)
+
+- **Atomic Row-Level Locking (`FOR UPDATE SKIP LOCKED`)**:
+  - Audited PostgreSQL-backed queuing queries across `AutomationWorkerService`, `InboundQueueService`, and `CampaignService`.
+  - Added `.with_for_update(skip_locked=True)` to job claiming queries, preventing duplicate job dispatch across parallel worker replicas or container restarts:
+    - `automation_worker.py`: Selects pending scheduled automation jobs with atomic row locking.
+    - `inbound_queue.py`: Selects pending inbound conversation batches with row locking, preventing dual LLM generation sweeps.
+    - `campaign_service.py`: Selects pending campaign recipients with row locking, preventing double WhatsApp campaign dispatches.
+- **Queue Concurrency & Crash Recovery Test Suite**:
+  - Implemented 7-scenario integration test suite (`tests/test_vps_queue_concurrency_and_reliability.py`):
+    1. Concurrent workers atomic claiming isolation (no duplicate leases).
+    2. Lease expiration and crashed worker recovery (stale locks reset after lease window).
+    3. Inbound queue debounced atomic locking.
+    4. Retry limits, exponential backoff, and dead-letter status transition.
+    5. Campaign recipient concurrency isolation.
+    6. Clinic quiet-hour deferral (21:00–09:00 IST deferred to 09:00 next business day).
+    7. Idempotency preventing duplicate WhatsApp dispatches.
+- **Disposable Stack Migration & Restore Rehearsal**:
+  - Applied all Alembic migrations (`001` through `008_campaigns_instagram_reengagement`) on a fresh PostgreSQL 16 + pgvector container in rehearsal mode, generating 64 public tables cleanly.
+  - Performed live backup via `pg_dump` and gzip compression, verified archive integrity with `gzip -t`, restored into a clean test database, and verified that 64 tables and pgvector extension (0.8.7) were restored without schema drift.
+- **PostgreSQL Resource Measurement**:
+  - PostgreSQL container idle memory measured at **66.5 MiB** (limit 800 MiB), connection pool set to 5 (`max_overflow=10`), `max_connections=50`.
+

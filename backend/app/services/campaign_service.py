@@ -813,7 +813,7 @@ class CampaignService:
 
             camp.status = "running"
 
-            # Fetch eligible recipients with batch limit
+            # Fetch eligible recipients with batch limit (atomic lock to avoid duplicate dispatches)
             recip_stmt = (
                 select(CampaignRecipient)
                 .where(
@@ -821,6 +821,7 @@ class CampaignService:
                     CampaignRecipient.status == "eligible",
                 )
                 .limit(min(limit, camp.batch_size))
+                .with_for_update(skip_locked=True)
             )
             recipients = (await db.execute(recip_stmt)).scalars().all()
 

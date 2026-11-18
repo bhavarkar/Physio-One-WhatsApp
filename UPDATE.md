@@ -127,3 +127,22 @@ For the active Hostinger Ubuntu Linux VPS Docker Compose target:
   - `deploy/vps/scripts/backup.sh` streams compressed dumps to `/opt/physio/backups/physio_backup_<timestamp>.sql.gz`.
   - Automatically purges backups older than 7 days, maintaining disk headroom on the 50 GB SSD.
 
+---
+
+## 8. Task 21 Rehearsal Verification & Safety Findings (2026-11-18)
+
+- **Disposable Stack Integration Rehearsal**:
+  - Successfully verified end-to-end upgrade simulation on a disposable stack without affecting active development or staging volumes.
+  - Confirmed that Alembic migrations run cleanly to head (revisions 001–008 generating 64 public tables), Caddy reliably proxies unified port 80/443 ingress, and container restarts preserve database volume contents.
+- **Queue Concurrency & Race Condition Elimination**:
+  - Hardened database queue transactions in `automation_worker.py`, `inbound_queue.py`, and `campaign_service.py` with `.with_for_update(skip_locked=True)`.
+  - Proved atomic locking under concurrent worker polling across 7 integration test scenarios (`test_vps_queue_concurrency_and_reliability.py`).
+- **Disaster Recovery Integrity Test**:
+  - Streamed `pg_dump` with gzip compression and verified archive integrity with `gzip -t`.
+  - Restored backup into a clean test database and confirmed that 64 tables and pgvector extension (0.8.7) were fully recovered.
+- **Resource Budget Ground Truth**:
+  - Measured live idle container consumption: Total **323 MiB** across 5 containers, leaving ~1.6 GB headroom for OS and system buffers on a 4 GB Hostinger VPS.
+- **Hostinger Preflight Checklist**:
+  - Authored `deploy/vps/HOSTINGER_PREFLIGHT_CHECKLIST.md` specifying read-only preflight commands for Task 22 server inspection.
+
+

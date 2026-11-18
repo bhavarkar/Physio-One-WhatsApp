@@ -413,5 +413,28 @@ bash deploy/vps/scripts/restore.sh /opt/physio/backups/physio_backup_YYYYMMDD_HH
 ```bash
 # Reverts images to previous version tag and stops outbound automation
 # Invariant: Never automatically down-migrates database schema
-bash deploy/vps/scripts/rollback.sh
+bash deploy/vps/scripts/rollback.sh --confirm
 ```
+
+---
+
+### 10.6 Task 21 Integration Rehearsal & Security Validation Results
+
+During Task 21, the complete Hostinger VPS Docker Compose stack was rehearsed in a disposable local environment:
+1. **Disposable Stack Verified:**
+   - PostgreSQL 16 + pgvector 0.8.7 started cleanly.
+   - 64 database tables created via Alembic migrations (`001` to `008`).
+   - Caddy reversed-proxied Next.js frontend (port 3000) and FastAPI API (port 8000) on unified port 80/443 ingress.
+   - Worker daemon processed synthetic queued tasks with outbound mock safeguards active.
+   - Container restart preserved PostgreSQL data volumes.
+2. **Queue Concurrency Hardened:**
+   - Row-level atomic locking with `.with_for_update(skip_locked=True)` implemented in `AutomationWorkerService`, `InboundQueueService`, and `CampaignService` to prevent race conditions across parallel worker instances.
+   - 7/7 new concurrency integration tests passing (`test_vps_queue_concurrency_and_reliability.py`).
+3. **Backup & Disaster Recovery Rehearsed:**
+   - `pg_dump` compressed with gzip produces verified archives (`gzip -t` verified).
+   - Full restoration into a clean test database restored 64 tables and pgvector extension cleanly.
+4. **Measured Resource Footprint:**
+   - Total idle memory across all 5 containers: **323 MiB** (PostgreSQL 66.5 MiB, API 91.6 MiB, Worker 93.3 MiB, Frontend 58.6 MiB, Caddy 13.1 MiB).
+   - Hard container limits configured to 2.4 GB, providing 1.6 GB headroom for Ubuntu OS and page cache on a 4 GB VPS.
+5. **Read-Only Preflight Inspection:**
+   - Preflight inspection checklist established in `deploy/vps/HOSTINGER_PREFLIGHT_CHECKLIST.md` for non-mutating server inspection in Task 22.

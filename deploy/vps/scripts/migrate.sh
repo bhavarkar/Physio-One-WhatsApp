@@ -28,6 +28,14 @@ fail()  { echo -e "\033[0;31m[FAIL]\033[0m  $*" >&2; exit 1; }
 
 # 1. Verify PostgreSQL Container is Healthy
 info "Checking PostgreSQL container readiness..."
+if [[ "${DRY_RUN}" == "true" ]]; then
+    info "[DRY-RUN] Would verify PostgreSQL container readiness."
+    info "[DRY-RUN] Would execute: docker compose run --rm migration"
+    info "[DRY-RUN] Would check: docker compose run --rm migration alembic current"
+    pass "[DRY-RUN] Migration simulation completed."
+    exit 0
+fi
+
 if ! docker compose ps postgres | grep -q "healthy"; then
     info "PostgreSQL container is not yet healthy. Waiting up to 30 seconds..."
     RETRIES=15

@@ -50,6 +50,13 @@ BACKUP_FILE="${BACKUP_DIR}/${PREFIX}_${TIMESTAMP}.sql.gz"
 
 # 2. Check if PostgreSQL container is running
 info "Checking if PostgreSQL container is running..."
+if [[ "${DRY_RUN}" == "true" ]]; then
+    info "[DRY-RUN] Would check if postgres container is running."
+    info "[DRY-RUN] Would execute pg_dump on postgres container to ${BACKUP_FILE}"
+    pass "[DRY-RUN] Backup simulation completed."
+    exit 0
+fi
+
 if ! docker compose ps postgres | grep -q "Up\|healthy"; then
     info "PostgreSQL container is not running. Checking if backup is required..."
     if [[ "${PREFIX}" == "pre_deploy_backup" ]]; then
@@ -61,12 +68,6 @@ if ! docker compose ps postgres | grep -q "Up\|healthy"; then
 fi
 
 # 3. Execute pg_dump and Gzip
-if [[ "${DRY_RUN}" == "true" ]]; then
-    info "[DRY-RUN] Would execute pg_dump on postgres container to ${BACKUP_FILE}"
-    pass "[DRY-RUN] Backup simulation completed."
-    exit 0
-fi
-
 info "Streaming compressed PostgreSQL dump to: ${BACKUP_FILE}..."
 docker compose exec -T postgres pg_dump \
     -U "${POSTGRES_USER:-physio_admin}" \

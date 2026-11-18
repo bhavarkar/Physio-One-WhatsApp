@@ -196,6 +196,8 @@ nano .env
 ```
 
 ### Step 3: Run Pre-flight Verification
+Before applying any mutating operations, execute the read-only preflight inspection checklist documented in [HOSTINGER_PREFLIGHT_CHECKLIST.md](./HOSTINGER_PREFLIGHT_CHECKLIST.md).
+Then run the automated preflight validation script:
 ```bash
 chmod +x scripts/*.sh
 ./scripts/preflight.sh

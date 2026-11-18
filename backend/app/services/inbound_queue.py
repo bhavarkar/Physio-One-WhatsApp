@@ -150,6 +150,7 @@ class InboundQueueService:
             )
             .order_by(InboundProcessingJob.debounce_until.asc())
             .limit(limit)
+            .with_for_update(skip_locked=True)
         )
         jobs = (await db.execute(stmt)).scalars().all()
 

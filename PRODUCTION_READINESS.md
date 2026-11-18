@@ -189,6 +189,28 @@ Before transitioning from Staging to Production, the following steps must be com
 | **Staging Safety Guards** | **PASS** | `compose.staging.yaml` enforces mock outbound (`STAGING_MOCK_OUTBOUND=true`), outbound kill switch (`AUTOMATION_OUTBOUND_ENABLED=false`), AI inbound disabled (`DEFAULT_AI_INBOUND_MODE=disabled`), read-only appointments (`APPOINTMENTS_READ_ONLY=true`), and draft-only campaigns (`CAMPAIGNS_DRAFT_ONLY=true`). |
 | **Legacy Cloud Run Preservation** | **PASS** | Terraform configurations in `infra/staging/` and PowerShell deployment scripts in `scripts/` preserved as reference infrastructure. |
 
-**Final Decision: READY FOR OPERATOR-APPROVED VPS STAGING DEPLOYMENT.**  
+---
+
+## Task 21 Scorecard (2026-11-18) — Hostinger VPS Local Integration Rehearsal, Security Audit & Deployment Approval Gate
+
+| Component | Status | Verification Summary |
+|---|---|---|
+| **Backend Tests** | **PASS** | **255 passed / 255 tests (100% pass rate in 106.23s)**. Includes 7 new integration tests in `test_vps_queue_concurrency_and_reliability.py` testing atomic worker claiming, crash recovery, debounce locking, retry limits, quiet hours, and idempotency. |
+| **Frontend Tests** | **PASS** | **53 passed / 53 tests (12 Jest test suites in 42.94s)** across all dashboard modules. |
+| **TypeScript Compilation** | **PASS** | `tsc --noEmit` exited code 0 with **0 errors**. |
+| **Next.js Production Build** | **PASS** | Next 14.2.35: 18 static routes compiled and prerendered cleanly, size optimized, exit code 0. |
+| **Disposable Stack Rehearsal** | **PASS** | Multi-container Docker Compose VPS stack (`compose.yaml` + `compose.staging.yaml` + `compose.rehearsal.yaml`) rehearsed with 5 healthy containers (`postgres`, `api`, `worker`, `frontend`, `caddy`) on isolated disposable network and volumes. |
+| **Database Migrations to Head** | **PASS** | Alembic migrations revisions `001` through `008_campaigns_instagram_reengagement` applied cleanly on clean PostgreSQL 16 container, generating 64 public tables and loading pgvector 0.8.7. |
+| **API & Frontend Ingress Routing** | **PASS** | Caddy reverse proxy routed `/health` (HTTP 200), `/api/v1/auth/setup-status` (HTTP 200), and `/` (Next.js SSR HTML 200) through unified ingress. |
+| **Queue Concurrency & Race Safety** | **PASS** | Implemented `.with_for_update(skip_locked=True)` in `AutomationWorkerService`, `InboundQueueService`, and `CampaignService`. Verified multi-worker isolation, lease recovery, and quiet-hour compliance. |
+| **Staging Fail-Closed Safeguards** | **PASS** | Live synthetic job picked up by worker and confirmed outbound suppressed with `kill_switch_disabled`. Zero real WhatsApp, YCloud, or LLM external API calls executed. |
+| **Backup & Disaster Recovery Rehearsal** | **PASS** | Tested `pg_dump` streaming with gzip compression. Validated archive with `gzip -t`. Restored dump into clean test database, verifying all 64 tables and pgvector extension restored identically. |
+| **VPS Resource Measurement** | **PASS** | Measured live idle container consumption: Total **323 MiB** RAM across all 5 containers (Postgres 66.5M, API 91.6M, Worker 93.3M, Frontend 58.6M, Caddy 13.1M). Sizing fits comfortably within 4 GB host with 1.6 GB headroom. |
+| **Deployment Scripts Validation** | **PASS** | Audited bash syntax across all 7 deployment scripts in `deploy/vps/scripts/`. Hardened `--dry-run` modes in `backup.sh` and `migrate.sh`. |
+| **Disposable Teardown Isolation** | **PASS** | Ephemeral rehearsal stack and volumes torn down cleanly without affecting existing development volumes (`physio_postgres_data`, `physio_media_storage`). |
+| **Hostinger Preflight Specification** | **PASS** | Authored read-only inspection checklist `deploy/vps/HOSTINGER_PREFLIGHT_CHECKLIST.md` for Task 22 preflight. |
+
+**Final Decision: READY FOR OPERATOR-APPROVED VPS PREFLIGHT.**  
 **Status: STOPPED AT OPERATOR APPROVAL GATE.**  
-**Zero remote SSH connections made. Zero remote infrastructure modified. Zero real WhatsApp messages sent. Awaiting operator provision of Hostinger VPS host credentials and domain.**
+**Zero remote SSH connections made. Zero remote infrastructure modified. Zero real WhatsApp messages sent. Ready for read-only preflight inspection in Task 22.**
+

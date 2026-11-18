@@ -754,3 +754,25 @@ A dedicated Python worker daemon provides continuous background processing for c
   - `verify.sh`: Health endpoint probe, port 5432 unexposed audit, and staging isolation flag inspection.
   - `rollback.sh`: Reverts container images to previous tags and activates outbound kill switch without destructively down-migrating database schema.
 - **Legacy Infrastructure Preservation**: Preserved `infra/staging/` Terraform configuration and `scripts/deploy-staging.ps1` as reference infrastructure, decoupled from active VPS deployments.
+
+---
+
+## Task 21 — Hostinger VPS Local Integration Rehearsal, Security Audit & Deployment Approval Gate (2026-11-18)
+- **Disposable Stack Integration Rehearsal**:
+  - Rehearsed the complete multi-container Docker Compose VPS architecture using disposable overlay `compose.rehearsal.yaml`, isolated project name `physio_vps_rehearsal`, private bridge network, and ephemeral volumes.
+  - Verified end-to-end container startup sequence: `postgres` (with `vector 0.8.7`), `migration` (64 tables generated across revisions 001–008), `api` (FastAPI healthy), `frontend` (Next.js SSR compiled), `worker` (runner daemon processing jobs), and `caddy` (reverse proxy routing `/` and `/api/*` on port 80).
+- **Queue and Scheduler Concurrency Hardening**:
+  - Identified race condition vulnerability in concurrent worker environments when polling PostgreSQL tables.
+  - Hardened `AutomationWorkerService`, `InboundQueueService`, and `CampaignService` by adding row-level atomic locking with `.with_for_update(skip_locked=True)`.
+  - Added 7-scenario concurrency and reliability test suite (`test_vps_queue_concurrency_and_reliability.py`), validating concurrent claiming isolation, lease expiration recovery, quiet-hour deferrals (21:00–09:00 IST), exponential backoff, dead-letter limits, and dispatch idempotency.
+- **Backup & Disaster Recovery Verification**:
+  - Performed live backup test streaming `pg_dump` through `gzip -9` with SHA256 verification.
+  - Performed test restore on a clean database verifying that all 64 tables and pgvector extension are restored identically without schema drift.
+- **Measured Container Resource Footprint**:
+  - Measured local live idle memory consumption: Total **323 MiB** across 5 containers (PostgreSQL 66.5 MiB, API 91.6 MiB, Worker 93.3 MiB, Frontend 58.6 MiB, Caddy 13.1 MiB).
+  - Confirmed 2.4 GB hard limit allocation comfortably satisfies the 4 GB Hostinger VPS envelope, providing ~1.6 GB headroom for systemd, Docker daemon, and OS page cache.
+- **Hostinger VPS Preflight Specification**:
+  - Authored `deploy/vps/HOSTINGER_PREFLIGHT_CHECKLIST.md` specifying read-only preflight commands for Task 22 inspection.
+- **Deployment Safety Invariants**:
+  - Retained strict staging isolation (`AUTOMATION_OUTBOUND_ENABLED=false`, `STAGING_MOCK_OUTBOUND=true`).
+  - Audited bash script failure handling and dry-run safety across `deploy/vps/scripts/*.sh`.
