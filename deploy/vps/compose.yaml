@@ -1,0 +1,273 @@
+name: physio_vps
+
+services:
+  # ----------------------------------------------------------------------------
+  # Caddy Reverse Proxy & Automated HTTPS
+  # ----------------------------------------------------------------------------
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: physio_vps_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      - DOMAIN_NAME=${DOMAIN_NAME:-app.example.com}
+      - API_DOMAIN=${API_DOMAIN:-api.example.com}
+    depends_on:
+      frontend:
+        condition: service_started
+      api:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 100M
+        reservations:
+          memory: 50M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - physio_vps_network
+
+  # ----------------------------------------------------------------------------
+  # Next.js Frontend Dashboard Service
+  # ----------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile.frontend
+    image: physio-one-frontend:vps
+    container_name: physio_vps_frontend
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      - NODE_ENV=production
+      - INTERNAL_API_URL=http://api:8000
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://${DOMAIN_NAME:-app.example.com}}
+    depends_on:
+      api:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 400M
+        reservations:
+          memory: 200M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - physio_vps_network
+
+  # ----------------------------------------------------------------------------
+  # FastAPI Backend API Service
+  # ----------------------------------------------------------------------------
+  api:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile.api
+    image: physio-one-api:vps
+    container_name: physio_vps_api
+    restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-physio_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-physio_one_db}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-physio_admin}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-physio_one_db}
+      - DATABASE_URL_SYNC=postgresql+psycopg2://${POSTGRES_USER:-physio_admin}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-physio_one_db}
+      - APP_SECRET=${APP_SECRET}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - AUTOMATION_WORKER_SECRET_TOKEN=${AUTOMATION_WORKER_SECRET_TOKEN}
+      - AUTOMATION_OUTBOUND_ENABLED=${AUTOMATION_OUTBOUND_ENABLED:-false}
+      - REQUIRE_OIDC_IN_PRODUCTION=false
+      - CLOUD_TASKS_ENABLED=false
+      - POSTGRES_POOL_SIZE=5
+      - POSTGRES_MAX_OVERFLOW=5
+      - POSTGRES_POOL_RECYCLE=1800
+      - POSTGRES_POOL_TIMEOUT=30
+      - STORAGE_BACKEND=local
+      - LOCAL_STORAGE_PATH=/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    volumes:
+      - media_storage:/app/storage
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 600M
+        reservations:
+          memory: 300M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - physio_vps_network
+
+  # ----------------------------------------------------------------------------
+  # Automation, Reminders & Campaign Background Worker Service
+  # ----------------------------------------------------------------------------
+  worker:
+    image: physio-one-api:vps
+    container_name: physio_vps_worker
+    restart: unless-stopped
+    command: ["python", "-m", "app.workers.runner"]
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-physio_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-physio_one_db}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-physio_admin}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-physio_one_db}
+      - DATABASE_URL_SYNC=postgresql+psycopg2://${POSTGRES_USER:-physio_admin}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-physio_one_db}
+      - APP_SECRET=${APP_SECRET}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - AUTOMATION_WORKER_SECRET_TOKEN=${AUTOMATION_WORKER_SECRET_TOKEN}
+      - AUTOMATION_OUTBOUND_ENABLED=${AUTOMATION_OUTBOUND_ENABLED:-false}
+      - WORKER_POLL_INTERVAL_SECONDS=${WORKER_POLL_INTERVAL_SECONDS:-15}
+      - REQUIRE_OIDC_IN_PRODUCTION=false
+      - CLOUD_TASKS_ENABLED=false
+      - POSTGRES_POOL_SIZE=3
+      - POSTGRES_MAX_OVERFLOW=2
+      - STORAGE_BACKEND=local
+      - LOCAL_STORAGE_PATH=/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+    volumes:
+      - media_storage:/app/storage
+    deploy:
+      resources:
+        limits:
+          cpus: "0.80"
+          memory: 500M
+        reservations:
+          memory: 200M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - physio_vps_network
+
+  # ----------------------------------------------------------------------------
+  # PostgreSQL 16 with pgvector Extension
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: physio_vps_postgres
+    restart: unless-stopped
+    # Security: Do NOT publish port 5432 to host. Private container network only.
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-physio_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-physio_one_db}
+    command: >
+      postgres
+      -c shared_buffers=128MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=64MB
+      -c max_connections=50
+      -c effective_cache_size=512MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 800M
+        reservations:
+          memory: 300M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - physio_vps_network
+
+  # ----------------------------------------------------------------------------
+  # One-shot Schema Migration Runner (Executed via scripts/migrate.sh)
+  # ----------------------------------------------------------------------------
+  migration:
+    image: physio-one-api:vps
+    container_name: physio_vps_migration
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-physio_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-physio_one_db}
+      - DATABASE_URL_SYNC=postgresql+psycopg2://${POSTGRES_USER:-physio_admin}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-physio_one_db}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 500M
+    profiles:
+      - tools
+    networks:
+      - physio_vps_network
+
+volumes:
+  postgres_data:
+    name: physio_vps_postgres_data
+  media_storage:
+    name: physio_vps_media_storage
+  caddy_data:
+    name: physio_vps_caddy_data
+  caddy_config:
+    name: physio_vps_caddy_config
+
+networks:
+  physio_vps_network:
+    name: physio_vps_network
+    driver: bridge

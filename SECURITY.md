@@ -296,3 +296,40 @@ The platform handles patient communications, appointment schedules, and contact 
   - Verifies billing enablement on the target project before executing billable provisioning phases.
 - **Secret Redaction in Deployment Tooling & Automated Tests**:
   - Automated tests in `backend/tests/test_staging_deployment_orchestration.py` verify that passwords and tokens are never printed in plain text, missing project IDs fail closed, and failed migrations halt downstream application traffic routing.
+
+---
+
+## Task 20 Hostinger Ubuntu Linux VPS Security Architecture (2026-11-18)
+
+- **Network Boundary & Port Isolation**:
+  - PostgreSQL port 5432 is strictly unmapped and unexposed to the VPS host or public internet; access is limited to containers on `physio_vps_network`.
+  - Application services (Next.js :3000, FastAPI :8000) are private container ports.
+  - Only ports 80 (HTTP) and 443 (HTTPS) are exposed to the public via Caddy.
+- **Edge Reverse Proxy & Transport Security (Caddy 2.8)**:
+  - Automated TLS certificate issuance and renewal via Let's Encrypt / ZeroSSL.
+  - HTTP Strict Transport Security (HSTS): `max-age=63072000; includeSubDomains; preload`.
+  - Security headers enforced:
+    - `X-Content-Type-Options: nosniff`
+    - `X-Frame-Options: DENY`
+    - `Referrer-Policy: strict-origin-when-cross-origin`
+    - `Permissions-Policy: geolocation=(), camera=(), microphone=(), payment=()`
+  - Request body limit capped at 15 MB to mitigate denial-of-service / buffer-overflow vectors.
+- **Hostinger Ubuntu VPS Host Hardening Protocol**:
+  - Dedicated non-root user (`physioadmin`) with sudo privileges; direct root SSH disabled (`PermitRootLogin no`).
+  - SSH public-key-only authentication (`PasswordAuthentication no`).
+  - Host firewall (UFW) configured to allow only ports 22 (SSH), 80 (HTTP), and 443 (HTTPS), rejecting all other inbound traffic.
+  - Intrusion prevention via `fail2ban` targeting SSH brute-force attempts.
+  - Automated system security updates via `unattended-upgrades`.
+- **Environment & Secrets Protection**:
+  - Production secrets reside in `/opt/physio/.env`, owned by the administrator user with strict permissions `chmod 600`.
+  - No secrets are baked into Docker images, committed to Git, or exposed in logs.
+- **Worker Authentication Parity**:
+  - `REQUIRE_OIDC_IN_PRODUCTION=false` configured for VPS, enabling worker endpoints to authenticate via constant-time HMAC header comparisons (`X-Worker-Token` matching `AUTOMATION_WORKER_SECRET_TOKEN`) and authenticated Admin/Owner sessions.
+- **Staging Safety Guards Preserved (`compose.staging.yaml`)**:
+  - Staging deployments mount `compose.staging.yaml` which overrides configurations to guarantee complete patient safety:
+    - `STAGING_MOCK_OUTBOUND=true`: Mocks all outbound WhatsApp dispatches, preventing any external API calls.
+    - `AUTOMATION_OUTBOUND_ENABLED=false`: Master kill switch halting all scheduled reminders and follow-ups.
+    - `DEFAULT_AI_INBOUND_MODE=disabled`: Disables automated AI receptionist responses.
+    - `APPOINTMENTS_READ_ONLY=true`: Blocks autonomous appointment mutations.
+    - `CAMPAIGNS_DRAFT_ONLY=true`: Forces all campaigns into draft status.
+    - `STAGING_ALLOWLIST_PHONE_NUMBERS=[]`: Enforces fail-closed deny-all default allowlist.

@@ -1,10 +1,14 @@
-# Physio One WhatsApp AI Platform — Controlled Staging Deployment Runbook
+# Physio One WhatsApp AI Platform — Deployment Runbook
 
-**Environment:** Google Cloud Platform (GCP) — Isolated Staging  
+**Primary Target (Active):** Hostinger Ubuntu Linux VPS (Docker Compose with Caddy Reverse Proxy & Automated HTTPS)  
+**Legacy Reference Target (Deferred):** Google Cloud Platform (GCP) Cloud Run & Cloud SQL  
 **Organization:** Physio One Clinic (Single Organization Edition)  
-**Region:** `asia-south1` (Mumbai)  
-**Target Architecture:** Cloud Run (API & Frontend), Cloud SQL PostgreSQL 16 + pgvector, Cloud Tasks, Cloud Scheduler, Secret Manager  
-**Estimated Monthly Cost:** USD 10.20–21.40/mo (`db-f1-micro`) or USD 25.70–39.40/mo (`db-custom-1-3840`) in `asia-south1`
+**Host Specifications (VPS):** 4 GB RAM, 50 GB SSD, Ubuntu 22.04/24.04 LTS  
+
+---
+
+> [!NOTE]
+> **Architecture Update (Task 20):** The primary deployment architecture has migrated from Google Cloud Run to a dedicated Hostinger Ubuntu Linux VPS running Docker Compose. For the active VPS deployment runbook, see [Section 10](#10-hostinger-ubuntu-linux-vps-deployment-runbook-active). Sections 1–9 document the legacy Google Cloud Run deployment pipeline, which remains preserved for reference.
 
 ---
 
@@ -277,4 +281,137 @@ terraform destroy \
   -var="env=staging" \
   -var="api_image=${REPO}/api:${COMMIT}" \
   -var="frontend_image=${REPO}/frontend:${COMMIT}"
+```
+
+---
+
+## 10. Hostinger Ubuntu Linux VPS Deployment Runbook (Active)
+
+This section provides the end-to-end, operator-ready deployment protocol for deploying the Physio One WhatsApp AI Platform onto a Hostinger Ubuntu Linux VPS using Docker Compose and Caddy.
+
+### 10.1 Host Prerequisites & Sizing
+- **Target OS:** Ubuntu 22.04 LTS or Ubuntu 24.04 LTS
+- **Hardware Profile:** 4 GB RAM, 50 GB SSD storage, 1–2 vCPUs
+- **Installed Software:** Docker Engine v24+, Docker Compose v2.20+, Git, curl, UFW, fail2ban
+- **Domain & DNS:** Fully qualified domain name (e.g. `clinic.physioone.in` or `staging.physioone.in`) pointing to the VPS public IP address via an `A` record.
+
+### 10.2 Host Hardening Protocol
+Execute on the VPS host as root during initial setup:
+```bash
+# 1. Update system packages
+apt update && apt upgrade -y
+
+# 2. Create non-root deployment user
+adduser physioadmin
+usermod -aG sudo physioadmin
+
+# 3. Configure SSH key-only authentication
+mkdir -p /home/physioadmin/.ssh
+cat >> /home/physioadmin/.ssh/authorized_keys # paste operator public key
+chown -R physioadmin:physioadmin /home/physioadmin/.ssh
+chmod 700 /home/physioadmin/.ssh && chmod 600 /home/physioadmin/.ssh/authorized_keys
+
+# 4. Configure UFW Firewall (restrict to SSH, HTTP, HTTPS)
+ufw default deny incoming
+ufw default allow outgoing
+ufw allow 22/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw enable
+
+# 5. Install Docker Engine & Compose plugin
+curl -fsSL https://get.docker.com | sh
+usermod -aG docker physioadmin
+```
+
+### 10.3 Repository & Directory Setup
+As `physioadmin`:
+```bash
+# Clone the repository into /opt/physio
+sudo mkdir -p /opt/physio
+sudo chown -R physioadmin:physioadmin /opt/physio
+git clone -b development https://github.com/organization/physio-one-agent.git /opt/physio
+cd /opt/physio
+
+# Initialize environment configuration
+cp deploy/vps/.env.example /opt/physio/.env
+chmod 600 /opt/physio/.env
+
+# Edit .env and supply actual secrets:
+#   DOMAIN=staging.physioone.in
+#   LETSENCRYPT_EMAIL=admin@physioone.in
+#   POSTGRES_PASSWORD=<generated-secure-password>
+#   APP_SECRET=<64-char-hex>
+#   JWT_SECRET_KEY=<64-char-hex>
+#   AUTOMATION_WORKER_SECRET_TOKEN=<64-char-hex>
+#   META_WHATSAPP_APP_SECRET=...
+#   YCLOUD_WEBHOOK_SECRET=...
+nano /opt/physio/.env
+```
+
+### 10.4 Execution Protocols
+
+#### Phase 1: Preflight Verification
+```bash
+bash deploy/vps/scripts/preflight.sh
+```
+Verifies memory ($\ge 3.2$ GB), disk space ($\ge 5$ GB free), Docker & Compose version, `.env` file permissions (`chmod 600`), and Compose file syntax.
+
+#### Phase 2: Staging Deployment (Isolated Mock Mode)
+```bash
+# Deploys with compose.yaml and compose.staging.yaml overlay:
+#   STAGING_MOCK_OUTBOUND=true
+#   AUTOMATION_OUTBOUND_ENABLED=false
+#   DEFAULT_AI_INBOUND_MODE=disabled
+#   APPOINTMENTS_READ_ONLY=true
+#   CAMPAIGNS_DRAFT_ONLY=true
+#   STAGING_ALLOWLIST_PHONE_NUMBERS=[]
+bash deploy/vps/scripts/deploy.sh staging
+```
+
+#### Phase 3: Production Deployment
+```bash
+# Deploys base compose.yaml without mock overrides
+bash deploy/vps/scripts/deploy.sh prod
+```
+
+#### Phase 4: Post-Deployment Verification
+```bash
+bash deploy/vps/scripts/verify.sh
+```
+Checks:
+- All 5 container services are active and healthy.
+- Port 5432 is strictly private and not reachable from host or internet.
+- Local endpoint `http://127.0.0.1:8000/health` returns `200 OK`.
+- Public HTTPS endpoint `https://$DOMAIN/health` returns `200 OK`.
+- First-time owner setup status via `/api/v1/auth/setup-status`.
+
+### 10.5 Maintenance & Operations
+
+#### Database Schema Migrations
+```bash
+# Run one-shot Alembic migration
+bash deploy/vps/scripts/migrate.sh
+```
+
+#### Automated Compressed Backups
+```bash
+# Creates /opt/physio/backups/physio_backup_<timestamp>.sql.gz with SHA256 checksum
+bash deploy/vps/scripts/backup.sh
+
+# Recommended root/physioadmin cron entry (daily at 02:00 IST):
+# 0 2 * * * /opt/physio/deploy/vps/scripts/backup.sh >> /var/log/physio-backup.log 2>&1
+```
+
+#### Disaster Recovery / Database Restore
+```bash
+# Enforces gzip integrity check and confirmation gate
+bash deploy/vps/scripts/restore.sh /opt/physio/backups/physio_backup_YYYYMMDD_HHMMSS.sql.gz --confirm-restore
+```
+
+#### Emergency Rollback & Outbound Kill Switch
+```bash
+# Reverts images to previous version tag and stops outbound automation
+# Invariant: Never automatically down-migrates database schema
+bash deploy/vps/scripts/rollback.sh
 ```

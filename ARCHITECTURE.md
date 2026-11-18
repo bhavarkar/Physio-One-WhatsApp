@@ -722,3 +722,35 @@ A dedicated Python worker daemon provides continuous background processing for c
 - **Cloud Scheduler Paused Invariant**: Schedulers declared with `paused = true` in `infra/staging/main.tf`. Precludes premature background execution upon initial Terraform apply. Activation is isolated to explicit Phase 11 operator gate.
 - **Windows-Native PowerShell 5.1 Runner (`scripts/deploy-staging.ps1`)**: Engineered for PowerShell 5.1 compatibility on Windows 11 with named parameters, `$ErrorActionPreference = 'Stop'`, native command exit code checks, project mismatch protection, billing validation, and secret redaction (`[REDACTED]`).
 - **Comprehensive Verification Runner (`scripts/verify-staging.ps1`)**: Unifies automated local validation (pytest, Jest, TypeScript, Next.js build, Docker, Terraform) and optional read-only cloud inspection.
+
+---
+
+## Task 20 — Hostinger Ubuntu Linux VPS Deployment Architecture (Docker Compose) (2026-11-18)
+- **Target Platform Migration**: Migrated the deployment architecture from Google Cloud Run staging to a lightweight, resource-constrained Docker Compose stack targeting an existing Hostinger Ubuntu Linux VPS (Ubuntu 22.04/24.04 LTS, 4 GB RAM, 50 GB SSD).
+- **Service Stack Decomposition**:
+  - `caddy:2.8-alpine`: Edge reverse proxy, automated Let's Encrypt / ZeroSSL HTTPS, public ports 80 & 443, security headers, gzip/zstd compression.
+  - `frontend`: Next.js 14 App Router dashboard, internal port 3000, server-side `/api/*` rewrite proxy.
+  - `api`: FastAPI REST backend, internal port 8000, health check `/health`, webhook HMAC verification, JWT session authentication.
+  - `worker`: Continuous polling daemon executing `python -m app.workers.runner` with internal 15-second sweeps across automations, inactivity check-ins, campaign legal windows, and inbound message debouncing.
+  - `postgres`: Containerized `pgvector/pgvector:pg16` on internal private network `physio_vps_network`. **Port 5432 is strictly private and NOT published to host.**
+  - `migration`: One-shot migration runner service (`profiles: ["tools"]`) executing `alembic upgrade head`.
+- **Resource Constraints (4 GB RAM Budget)**:
+  - Container hard limits: PostgreSQL 800 MB (1.0 CPU), API 600 MB (1.0 CPU), Worker 500 MB (0.8 CPU), Frontend 400 MB (1.0 CPU), Caddy 100 MB (0.5 CPU).
+  - Total container limits: 2.4 GB / 4.0 GB (60%), guaranteeing 1.6 GB (40%) unallocated headroom for Linux OS kernel, page cache, Docker daemon, and temporary CLI executions.
+  - Container log rotation enforced on all services via `json-file` driver (`max-size: "10m"`, `max-file: "3"`).
+- **GCP Managed Services Replacement**:
+  - *Cloud SQL Unix socket* $\rightarrow$ Private Docker network TCP (`postgres:5432`).
+  - *Cloud Tasks* $\rightarrow$ Durable PostgreSQL queue tables (`scheduled_automations`, `message_debounce`, `campaign_recipients`).
+  - *Cloud Scheduler* $\rightarrow$ Continuous background polling daemon (`app.workers.runner`).
+  - *Cloud Run Jobs* $\rightarrow$ One-shot Docker Compose migration runner (`docker compose run --rm migration`).
+  - *Google Secret Manager* $\rightarrow$ Server-side `/opt/physio/.env` file with root/admin ownership and `chmod 600`.
+- **Worker Authentication Parity**: Configured `REQUIRE_OIDC_IN_PRODUCTION=false` on VPS, enabling constant-time `X-Worker-Token` HMAC validation (`AUTOMATION_WORKER_SECRET_TOKEN`) and Admin session authentication on worker routes without requiring Google Cloud IAM infrastructure.
+- **Operational Bash Script Suite (`deploy/vps/scripts/`)**:
+  - `preflight.sh`: Validates CPU/RAM ($\ge 3.2$ GB), free disk space ($\ge 5$ GB), Docker v2, `.env` permissions (`chmod 600`), and Compose syntax.
+  - `deploy.sh`: Orchestrates backup $\rightarrow$ image build $\rightarrow$ DB start $\rightarrow$ migrations $\rightarrow$ API/worker $\rightarrow$ frontend $\rightarrow$ Caddy $\rightarrow$ verification.
+  - `migrate.sh`: Executes one-shot Alembic migration to `head` and checks current revision.
+  - `backup.sh`: Compressed streaming `pg_dump` with SHA256 checksums and 7-day retention rotation.
+  - `restore.sh`: Gzip integrity check, confirmation gate (`--confirm-restore`), streaming `psql` restore, and table count check ($\ge 63$).
+  - `verify.sh`: Health endpoint probe, port 5432 unexposed audit, and staging isolation flag inspection.
+  - `rollback.sh`: Reverts container images to previous tags and activates outbound kill switch without destructively down-migrating database schema.
+- **Legacy Infrastructure Preservation**: Preserved `infra/staging/` Terraform configuration and `scripts/deploy-staging.ps1` as reference infrastructure, decoupled from active VPS deployments.

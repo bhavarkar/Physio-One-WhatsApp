@@ -10,6 +10,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0-draft] - 2026-11-18
 
 ### Added
+- **Task 20: Migrate Cloud Run Deployment Architecture to Hostinger Ubuntu VPS (Docker Compose)**:
+  - **Hostinger Ubuntu Linux VPS Docker Compose Stack (`deploy/vps/compose.yaml` & `deploy/vps/compose.staging.yaml`)**:
+    - Migrated deployment target from Google Cloud Run staging to a lightweight Docker Compose multi-container stack engineered for an existing Hostinger Ubuntu Linux VPS (Ubuntu 22.04/24.04 LTS, 4 GB RAM, 50 GB SSD).
+    - Decomposed architecture into 5 services + 1 migration tool:
+      - `caddy:2.8-alpine`: Edge reverse proxy, automated Let's Encrypt / ZeroSSL HTTPS, public ports 80 & 443, security headers, gzip/zstd compression.
+      - `frontend`: Next.js 14 App Router dashboard, internal port 3000, server-side `/api/*` rewrite proxy.
+      - `api`: FastAPI REST backend, internal port 8000, health check `/health`, webhook HMAC verification, JWT session auth.
+      - `worker`: Continuous polling daemon executing `python -m app.workers.runner` with internal 15-second sweeps across automations, inactivity check-ins, campaign legal windows, and inbound message debouncing.
+      - `postgres`: Containerized `pgvector/pgvector:pg16` on internal private network `physio_vps_network`. **Port 5432 is strictly unmapped and unexposed to host or internet.**
+      - `migration`: One-shot migration runner service (`profiles: ["tools"]`) executing `alembic upgrade head`.
+  - **Strict Resource Budget & Sizing for 4 GB RAM VPS**:
+    - Total container hard memory limits capped at 2.4 GB (Postgres 800 MB, API 600 MB, Worker 500 MB, Frontend 400 MB, Caddy 100 MB).
+    - Guarantees 1.6 GB (40%) unallocated headroom for Linux OS kernel, page cache, Docker daemon, and temporary CLI executions.
+    - Container log rotation enforced on all services via `json-file` driver (`max-size: "10m"`, `max-file: "3"`).
+  - **GCP Managed Services Replacement**:
+    - Replaced Cloud SQL Unix socket with private Docker network TCP (`postgres:5432`).
+    - Replaced Cloud Tasks with durable PostgreSQL queue tables (`scheduled_automations`, `message_debounce`, `campaign_recipients`).
+    - Replaced Cloud Scheduler with continuous background polling daemon (`app.workers.runner`).
+    - Replaced Cloud Run Jobs with one-shot Docker Compose migration runner (`docker compose run --rm migration`).
+    - Replaced Google Secret Manager with server-side `/opt/physio/.env` file with root/admin ownership and `chmod 600`.
+  - **Worker Authentication Parity**:
+    - Configured `REQUIRE_OIDC_IN_PRODUCTION=false` on VPS, enabling constant-time `X-Worker-Token` HMAC validation (`AUTOMATION_WORKER_SECRET_TOKEN`) and Admin session authentication on worker routes without requiring Google Cloud IAM infrastructure.
+  - **Operational Bash Script Suite (`deploy/vps/scripts/`)**:
+    - Authored 7 comprehensive operational bash scripts:
+      - `preflight.sh`: Validates CPU/RAM ($\ge 3.2$ GB), free disk space ($\ge 5$ GB), Docker v2, `.env` permissions (`chmod 600`), and Compose syntax.
+      - `deploy.sh`: Orchestrates backup $\rightarrow$ image build $\rightarrow$ DB start $\rightarrow$ migrations $\rightarrow$ API/worker $\rightarrow$ frontend $\rightarrow$ Caddy $\rightarrow$ verification.
+      - `migrate.sh`: Executes one-shot Alembic migration to `head` and checks current revision.
+      - `backup.sh`: Compressed streaming `pg_dump` with SHA256 checksums and 7-day retention rotation.
+      - `restore.sh`: Gzip integrity check, confirmation gate (`--confirm-restore`), streaming `psql` restore, and table count check ($\ge 63$).
+      - `verify.sh`: Health endpoint probe, port 5432 unexposed audit, and staging isolation flag inspection.
+      - `rollback.sh`: Reverts container images to previous tags and activates outbound kill switch without destructively down-migrating database schema.
+  - **Staging Safety Guards Preserved (`deploy/vps/compose.staging.yaml`)**:
+    - Preserved staging mock mode (`STAGING_MOCK_OUTBOUND=true`), outbound kill switch (`AUTOMATION_OUTBOUND_ENABLED=false`), AI inbound disabled (`DEFAULT_AI_INBOUND_MODE=disabled`), read-only appointments (`APPOINTMENTS_READ_ONLY=true`), and draft-only campaigns (`CAMPAIGNS_DRAFT_ONLY=true`).
+  - **Automated Verification Test Suite**:
+    - Created `backend/tests/test_vps_deployment_architecture.py` with 10 comprehensive unit tests covering compose syntax, resource budgets, port 5432 privacy, Caddy configuration, script presence and syntax, worker auth parity, and staging isolation.
+    - **Backend Test Suite:** 248 passed / 248 tests (100% pass rate in backend/tests).
+    - **Frontend Test Suite:** 53 passed / 53 tests (12 Jest suites).
+    - **TypeScript Compilation:** 0 errors (`tsc --noEmit`).
+    - **Next.js Production Build:** 18/18 static routes compiled cleanly.
+    - **Docker Compose Stack:** Local Compose healthy, VPS Compose validated.
+  - **Legacy Infrastructure Preservation**:
+    - Preserved `infra/staging/` Terraform configuration and `scripts/deploy-staging.ps1` as reference infrastructure, decoupled from active VPS deployments.
+  - **Deployment Boundary Preserved**:
+    - Stopped at the VPS Operator Approval Gate. Zero remote SSH connections made. Zero remote infrastructure modified. Zero live WhatsApp messages sent.
+
 - **Task 19: Correct Cloud Staging Bootstrap, Prepare Windows PowerShell Deployment & Final Release Gate**:
   - **Windows PowerShell 5.1 Staging Deployment Tooling (`scripts/deploy-staging.ps1`)**:
     - Authored native Windows PowerShell 5.1 runner enforcing the 11-phase acyclic deployment sequence (`Preflight` $\rightarrow$ `Foundation` $\rightarrow$ `BuildImages` $\rightarrow$ `Secrets` $\rightarrow$ `Database` $\rightarrow$ `User` $\rightarrow$ `Migration` $\rightarrow$ `App` $\rightarrow$ `Schedulers` $\rightarrow$ `Reconcile` $\rightarrow$ `ActivateSchedulers`).

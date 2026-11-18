@@ -1,0 +1,34 @@
+# ==============================================================================
+# Physio One WhatsApp AI Platform — Hostinger VPS Staging Override Compose
+#
+# Usage:
+#   docker compose -f compose.yaml -f compose.staging.yaml up -d
+#
+# Enforces staging isolation, provider mock mode, read-only appointments,
+# draft-only campaigns, disabled AI receptionist, and fail-closed allowlist.
+# ==============================================================================
+
+services:
+  api:
+    environment:
+      - ENVIRONMENT=staging
+      - STAGING_MOCK_OUTBOUND=true
+      - AUTOMATION_OUTBOUND_ENABLED=false
+      - DEFAULT_AI_INBOUND_MODE=disabled
+      - APPOINTMENTS_READ_ONLY=true
+      - CAMPAIGNS_DRAFT_ONLY=true
+      - STAGING_ALLOWLIST_PHONE_NUMBERS=[]
+
+  worker:
+    environment:
+      - ENVIRONMENT=staging
+      - STAGING_MOCK_OUTBOUND=true
+      - AUTOMATION_OUTBOUND_ENABLED=false
+      - DEFAULT_AI_INBOUND_MODE=disabled
+      - APPOINTMENTS_READ_ONLY=true
+      - CAMPAIGNS_DRAFT_ONLY=true
+      - STAGING_ALLOWLIST_PHONE_NUMBERS=[]
+
+  migration:
+    environment:
+      - ENVIRONMENT=staging

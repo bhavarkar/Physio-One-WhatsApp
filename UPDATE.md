@@ -104,3 +104,26 @@ In Google Cloud Run environments:
 - Out-of-Band Cloud SQL Credential Lifecycle: Database user `physio_admin` is managed out-of-band via Secret Manager and `gcloud sql users create` (or `set-password`). Passwords are never serialized into `terraform.tfstate`. Password rotations are executed by adding a new secret version to `physio-staging-db-password`, running `gcloud sql users set-password`, and restarting Cloud Run revisions.
 - Windows PowerShell 5.1 Deployment Lifecycle: Staging releases and updates are orchestrated via `scripts/deploy-staging.ps1`. The runner enforces an 11-phase acyclic sequence, validates prerequisites, runs dedicated migrations before promoting traffic, leaves background schedulers dormant until explicit Phase 11 activation, and provides non-destructive `-DryRun` simulation. Automated health and readiness checks are verified via `scripts/verify-staging.ps1`.
 
+---
+
+## 7. Hostinger Ubuntu Linux VPS Lifecycle Management & Updates (Active)
+
+For the active Hostinger Ubuntu Linux VPS Docker Compose target:
+- **Application Updates via `deploy/vps/scripts/deploy.sh`**:
+  - Updates follow a strict 8-stage sequence:
+    1. Preflight sanity check (`deploy/vps/scripts/preflight.sh`).
+    2. Automated pre-update database snapshot (`deploy/vps/scripts/backup.sh`) with gzip integrity and SHA256 verification.
+    3. Docker image build / pull (`docker compose build`).
+    4. Database container startup and health check wait (`docker compose up -d postgres`).
+    5. Database schema migration runner (`deploy/vps/scripts/migrate.sh` running `docker compose run --rm migration alembic upgrade head`).
+    6. Application and background worker startup (`docker compose up -d api worker`).
+    7. Next.js frontend startup (`docker compose up -d frontend`).
+    8. Caddy reverse proxy reload (`docker compose up -d caddy`).
+- **Data Protection Invariant (Zero Down-Migrations)**:
+  - If a deployment or update fails post-migration health checks, `deploy/vps/scripts/rollback.sh` reverts the container images to previous tags and enforces the emergency outbound kill switch.
+  - The database schema is **never automatically downgraded** to prevent irreversible loss of newly committed data.
+  - Full point-in-time database restoration is performed manually by the operator using `deploy/vps/scripts/restore.sh` with the explicit `--confirm-restore` safety gate.
+- **Automated Backup Rotation**:
+  - `deploy/vps/scripts/backup.sh` streams compressed dumps to `/opt/physio/backups/physio_backup_<timestamp>.sql.gz`.
+  - Automatically purges backups older than 7 days, maintaining disk headroom on the 50 GB SSD.
+

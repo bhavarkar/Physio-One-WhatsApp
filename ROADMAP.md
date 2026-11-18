@@ -46,8 +46,14 @@ Each phase corresponds to discrete tasks defined in `PRD.md`:
 - **Task 17**: Resolve Staging Deployment Blockers and Prepare a Safe Google Cloud Launch [COMPLETED]
 - **Task 18**: Final Staging Security Gate, Terraform State Audit & Deployment Dry Run [COMPLETED]
 - **Task 19**: Correct Cloud Staging Bootstrap, Prepare Windows PowerShell Deployment & Final Release Gate [COMPLETED - STANDING BY AT APPROVAL GATE]
+- **Task 20**: Migrate Cloud Run Deployment Architecture to Hostinger Ubuntu VPS (Docker Compose) [COMPLETED - STANDING BY AT VPS APPROVAL GATE]
 
 ---
 
 ## Task 19 Status (2026-11-18)
 Staging deployment bootstrap dependencies corrected, Windows PowerShell 5.1 native tooling (`scripts/deploy-staging.ps1` and `scripts/verify-staging.ps1`) authored and verified, Cloud Scheduler paused invariant (`paused = true`) enforced in Terraform, migration-before-ingress sequencing guaranteed, and database credential residual risks documented. All verifications passed cleanly: 238 backend tests (100% pass rate), 53 frontend tests across 12 Jest suites, 0 TypeScript errors, 18 Next.js static routes compiled, and Docker Compose healthy. Standing by at the Task 19 Operator Approval Gate (`STAGING_DEPLOYMENT_APPROVAL.md`). Cloud provisioning strictly pending explicit operator sign-off. Zero billable GCP resources created. Zero real WhatsApp messages sent.
+
+---
+
+## Task 20 Status (2026-11-18)
+Migrated staging and production deployment target architecture from Google Cloud Run to a dedicated Hostinger Ubuntu Linux VPS (Ubuntu 22.04/24.04 LTS, 4 GB RAM, 50 GB storage) using Docker Compose and Caddy. Multi-container stack designed with strict resource limits: total container memory capped at 2.4 GB, reserving 1.6 GB (40%) free memory for OS and buffers. Implemented private network isolation (PostgreSQL port 5432 strictly unexposed to host). Authored 7 operational bash scripts in `deploy/vps/scripts/` (`preflight.sh`, `deploy.sh`, `migrate.sh`, `backup.sh`, `restore.sh`, `verify.sh`, `rollback.sh`). Replaced Cloud Tasks and Cloud Scheduler with continuous background daemon `app.workers.runner` backed by durable PostgreSQL state tables. Added `test_vps_deployment_architecture.py` with 10 automated unit tests (all passing). Full regression passed: 248 backend tests passed (100%), 53 frontend tests passed across 12 Jest suites, TypeScript 0 errors, Next.js build clean. Standing by at the Task 20 VPS Operator Approval Gate. Zero remote SSH connections made. Zero remote infrastructure modified. Zero real WhatsApp messages sent.

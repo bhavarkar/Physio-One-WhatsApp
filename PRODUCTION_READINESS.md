@@ -169,6 +169,26 @@ Before transitioning from Staging to Production, the following steps must be com
 | **Cloud Scheduler Paused Invariant** | **PASS** | Schedulers created paused (`paused = true`). Resumption quarantined into explicit Phase 11 operator gate. |
 | **Database Credential Bootstrap** | **PASS** | Out-of-band user creation protocol verified; zero passwords in tfstate, Git, or logs; residual risks documented. |
 
-**Final Decision: READY FOR OPERATOR-APPROVED STAGING DEPLOYMENT.**  
+---
+
+## Task 20 Scorecard (2026-11-18) — Hostinger Ubuntu Linux VPS Deployment Architecture (Docker Compose)
+
+| Component | Status | Verification Summary |
+|---|---|---|
+| **Backend Tests** | **PASS** | **248 passed / 248 tests (100% pass rate in backend/tests)**. Includes 10 new tests in `test_vps_deployment_architecture.py` covering resource budgets, port 5432 privacy, Caddy config, operational scripts, worker auth parity, and staging isolation. |
+| **Frontend Tests** | **PASS** | **53 passed / 53 tests (12 Jest test suites)** across all dashboard modules. |
+| **TypeScript Compilation** | **PASS** | `tsc --noEmit` exited code 0 with **0 errors**. |
+| **Next.js Production Build** | **PASS** | Next 14.2.35: 18 static routes generated cleanly, size optimized, exit code 0. |
+| **VPS Compose Configuration** | **PASS** | `docker compose -f deploy/vps/compose.yaml config` validated with exit code 0. |
+| **VPS Staging Overlay** | **PASS** | `docker compose -f deploy/vps/compose.yaml -f deploy/vps/compose.staging.yaml config` validated with exit code 0. |
+| **RAM Budget (4 GB Host)** | **PASS** | Total container memory limits capped at 2.4 GB (Postgres 800M, API 600M, Worker 500M, Frontend 400M, Caddy 100M), guaranteeing 1.6 GB (40%) free headroom for Linux OS and buffers. |
+| **Database Network Isolation** | **PASS** | PostgreSQL 16 + pgvector container runs on `physio_vps_network`. Port 5432 has no host port mapping and is strictly unreachable externally. |
+| **Operational Script Suite** | **PASS** | 7 operational bash scripts authored and syntax-checked in `deploy/vps/scripts/` (`preflight.sh`, `deploy.sh`, `migrate.sh`, `backup.sh`, `restore.sh`, `verify.sh`, `rollback.sh`). |
+| **Durable Queuing & Runner** | **PASS** | Background automations and message debouncing run continuously via `app.workers.runner` daemon backed by durable PostgreSQL state tables (`scheduled_automations`, `message_debounce`, `campaign_recipients`). |
+| **Worker Auth Parity** | **PASS** | Configured `REQUIRE_OIDC_IN_PRODUCTION=false` for VPS, enabling constant-time `X-Worker-Token` HMAC validation and Admin session auth on worker routes. |
+| **Staging Safety Guards** | **PASS** | `compose.staging.yaml` enforces mock outbound (`STAGING_MOCK_OUTBOUND=true`), outbound kill switch (`AUTOMATION_OUTBOUND_ENABLED=false`), AI inbound disabled (`DEFAULT_AI_INBOUND_MODE=disabled`), read-only appointments (`APPOINTMENTS_READ_ONLY=true`), and draft-only campaigns (`CAMPAIGNS_DRAFT_ONLY=true`). |
+| **Legacy Cloud Run Preservation** | **PASS** | Terraform configurations in `infra/staging/` and PowerShell deployment scripts in `scripts/` preserved as reference infrastructure. |
+
+**Final Decision: READY FOR OPERATOR-APPROVED VPS STAGING DEPLOYMENT.**  
 **Status: STOPPED AT OPERATOR APPROVAL GATE.**  
-**Zero billable GCP resources created. Zero real WhatsApp messages sent. Awaiting operator signature on `STAGING_DEPLOYMENT_APPROVAL.md`.**
+**Zero remote SSH connections made. Zero remote infrastructure modified. Zero real WhatsApp messages sent. Awaiting operator provision of Hostinger VPS host credentials and domain.**

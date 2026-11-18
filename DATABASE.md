@@ -244,3 +244,35 @@ Static audit: Alembic chain is linear `001→008`; migrations contain exactly 63
   - To maintain zero-code-change parity between local Docker Compose development and Cloud Run staging environments, controlled password-based bootstrap is retained with explicit residual risk disclosure.
 - **Migration-Before-Ingress Invariant Enforced**:
   - The 11-phase deployment orchestrator enforces execution of `physio-staging-db-migrate` in Phase 7, verifying exit code 0 and schema revision `008_campaigns_instagram_reengagement (head)` before Phase 8 deploys application containers and exposes ingress routes.
+
+---
+
+## Task 20 Hostinger VPS Docker Compose Database Architecture (2026-11-18)
+
+- **Containerized PostgreSQL 16 & pgvector on VPS**:
+  - Image: `pgvector/pgvector:pg16` running inside private Docker network `physio_vps_network`.
+  - TCP internal networking: backend services connect via `postgresql+asyncpg://physio_user:***@postgres:5432/physio_db`.
+  - **Zero Host Port Exposure Invariant**: Port 5432 has no port mapping in `deploy/vps/compose.yaml` and is strictly unreachable from the VPS host network and the internet.
+- **Tuned PostgreSQL Sizing for 4 GB RAM Host**:
+  - Container hard limit: `memory: 800M`, `cpus: '1.0'`.
+  - Engine command overrides in Compose:
+    - `shared_buffers = 128MB` (conservative allocation leaving memory for pgvector indexes and OS cache)
+    - `work_mem = 4MB`
+    - `maintenance_work_mem = 64MB`
+    - `effective_cache_size = 512MB`
+    - `max_connections = 50`
+  - Eliminates out-of-memory risks on 4 GB RAM host while maintaining fast HNSW cosine distance similarity queries.
+- **PostgreSQL-Backed Durable Queuing & State Tables**:
+  - With Cloud Tasks removed, background tasks rely entirely on durable relational database tables as the single source of truth:
+    - `scheduled_automations`: Handles appointment reminders (24h, 2h) and 3-touch follow-ups (2h, 24h, 48h). Includes atomic lease locking (`worker_id`, `locked_at`), execution status (`pending`, `running`, `completed`, `failed`), retry backoff counters, and cancellation flags.
+    - `message_debounce`: Inbound WhatsApp messages collected during the debouncing window before AI generation triggers.
+    - `campaign_recipients`: Delivery tracking across broadcast campaigns, tracking recipient status (`pending`, `sent`, `failed`, `skipped`) and compliance with legal contact hours (09:00–21:00 IST).
+- **One-Shot Migration Service**:
+  - `migration` service defined with `profiles: ["tools"]` in `deploy/vps/compose.yaml`.
+  - Uses `alembic upgrade head` over private TCP network `postgres:5432`.
+  - Orchestrated via `deploy/vps/scripts/migrate.sh`, guaranteeing database schema upgrades run to completion before API or worker services start.
+- **Backup & Disaster Recovery Procedures**:
+  - `deploy/vps/scripts/backup.sh`: Streams compressed database dump via `docker compose exec -T postgres pg_dump -U ... | gzip > /opt/physio/backups/physio_backup_<timestamp>.sql.gz`. Verifies dump integrity, computes SHA256 checksum, and rotates archives older than 7 days.
+  - `deploy/vps/scripts/restore.sh`: Validates gzip integrity (`gzip -t`), enforces an explicit operator confirmation flag (`--confirm-restore`), terminates active database connections, streams decompressed SQL into `psql`, and verifies schema integrity ($\ge 63$ tables present).
+- **Data Protection Invariant**:
+  - Automatic database down-migrations are strictly prohibited in `deploy/vps/scripts/rollback.sh`. If a deployment fails, containers are reverted to previous images while the database remains forward-compatible.
