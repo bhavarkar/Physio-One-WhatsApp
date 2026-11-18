@@ -135,6 +135,22 @@ Before transitioning from Staging to Production, the following steps must be com
 | **WhatsApp Staging Isolation** | **PASS** | Synthetic contact allowlist (`STAGING_ALLOWLIST_PHONE_NUMBERS`), provider mock mode (`STAGING_MOCK_OUTBOUND`), read-only appointments (`APPOINTMENTS_READ_ONLY`), and draft-only campaigns (`CAMPAIGNS_DRAFT_ONLY`) enforced. |
 | **Staged Bootstrap Sequence** | **PASS** | 6-phase deployment procedure authored in `STAGING_DEPLOYMENT_APPROVAL.md` resolving all container image, API, and Secret Manager dependency cycles. |
 
-**Final Decision: READY FOR STAGING DEPLOYMENT APPROVAL.**  
+## Task 18 Scorecard (2026-11-18) — Final Staging Security Gate, Terraform State Audit & Deployment Dry Run
+
+| Component | Status | Verification Summary |
+|---|---|---|
+| **Backend Tests** | **PASS** | **225 passed / 225 tests (100% pass rate in 71.70s)**. Includes 6 new tests covering zero-secret user bootstrap, fail-closed deny-all default allowlist, staging mock mode scoping, and draft-only campaign suppression. |
+| **Frontend Tests** | **PASS** | **53 passed / 53 tests (12 Jest test suites in 21.77s)** across all dashboard modules. |
+| **TypeScript Compilation** | **PASS** | `tsc --noEmit` exited code 0 with **0 errors**. |
+| **Next.js Production Build** | **PASS** | Next 14.2.35: 18 static routes generated cleanly, size optimized, exit code 0. |
+| **Docker Compose Stack** | **PASS** | 4 healthy containers operational on host (`physio_postgres`, `physio_api`, `physio_worker`, `physio_frontend`). API `/health` returns 200 healthy. |
+| **PostgreSQL 16 & Disposable DB** | **PASS** | Verified clean Alembic execution `001→008` (head) and rollback/re-upgrade sequence on isolated disposable database `physio_migration_disposable`. |
+| **Terraform Staging IaC** | **PASS** | `infra/staging/main.tf` formatted and validated (`terraform validate` exit 0). 17 top-level resource blocks expanding via `for_each` to 43 discrete Google Cloud resources. |
+| **Absolute Zero-Secret State** | **PASS** | Excised `google_sql_user` from Terraform; user `physio_admin` provisioned out-of-band via `gcloud sql users create` directly from Secret Manager to guarantee zero password exposure in `terraform.tfstate`. |
+| **Fail-Closed WhatsApp Isolation** | **PASS** | `STAGING_MOCK_OUTBOUND = True` default; strict deny-all default when allowlist is empty in staging; `AUTOMATION_OUTBOUND_ENABLED=false`, `APPOINTMENTS_READ_ONLY=true`, `CAMPAIGNS_DRAFT_ONLY=true`. |
+| **Worker Execution Architecture** | **PASS** | Resolved separation: Cloud Tasks (OIDC) $\rightarrow$ event-driven endpoints; Cloud Scheduler (OIDC) $\rightarrow$ periodic cron endpoints; Cloud Run Jobs (OAuth 2.0 API) $\rightarrow$ batch maintenance; Dedicated Job $\rightarrow$ migrations. |
+| **Staged Bootstrap Sequence** | **PASS** | 6-phase deployment procedure authored in `STAGING_DEPLOYMENT_APPROVAL.md` resolving all container image, API, and Secret Manager dependency cycles. |
+
+**Final Decision: READY FOR OPERATOR-APPROVED STAGING DEPLOYMENT.**  
 **Status: STOPPED AT OPERATOR APPROVAL GATE.**  
 **Zero billable GCP resources created. Zero real WhatsApp messages sent. Awaiting operator signature on `STAGING_DEPLOYMENT_APPROVAL.md`.**

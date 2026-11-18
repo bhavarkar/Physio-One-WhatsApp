@@ -43,9 +43,10 @@ Each phase corresponds to discrete tasks defined in `PRD.md`:
 - **Task 14**: Staging Infrastructure, Container Verification & PostgreSQL Validation [COMPLETED]
 - **Task 15**: Production Security Hardening, Cloud Staging Preflight & Deployment Approval Gate [COMPLETED]
 - **Task 16**: Google Cloud Staging Deployment Readiness, Integration Verification & Approval Gate [COMPLETED]
-- **Task 17**: Resolve Staging Deployment Blockers and Prepare a Safe Google Cloud Launch [COMPLETED - STANDING BY AT APPROVAL GATE]
+- **Task 17**: Resolve Staging Deployment Blockers and Prepare a Safe Google Cloud Launch [COMPLETED]
+- **Task 18**: Final Staging Security Gate, Terraform State Audit & Deployment Dry Run [COMPLETED - STANDING BY AT APPROVAL GATE]
 
 ---
 
-## Task 17 Status (2026-11-18)
-Staging deployment blockers fully resolved and verified across 219 backend tests (100% pass rate), 53 frontend tests, 0 TypeScript errors, 18 Next.js static routes, and running Docker containers. Staged 6-phase bootstrap sequence, dedicated migration job (`physio-staging-db-migrate`), connection budget calculator, and zero-secret Terraform state for Cloud SQL user implemented. Standing by at the Task 17 Operator Approval Gate (`STAGING_DEPLOYMENT_APPROVAL.md`). Cloud provisioning strictly pending explicit operator sign-off. Zero billable GCP resources created. Zero real WhatsApp messages sent.
+## Task 18 Status (2026-11-18)
+Final staging security gaps closed, Terraform state audited, and deployment dry run completed across 225 backend tests (100% pass rate), 53 frontend tests, 0 TypeScript errors, 18 Next.js static routes, and running Docker containers. Absolute zero-secret Terraform state enforced (`google_sql_user` excised; database user bootstrapped out-of-band via `gcloud sql users create` from Secret Manager), fail-closed WhatsApp isolation with deny-all default allowlist verified, disposable database migration test (`001→008` and rollback/re-upgrade) verified, and complete 43-instance Terraform resource graph audited. Standing by at the Task 18 Operator Approval Gate (`STAGING_DEPLOYMENT_APPROVAL.md`). Cloud provisioning strictly pending explicit operator sign-off. Zero billable GCP resources created. Zero real WhatsApp messages sent.

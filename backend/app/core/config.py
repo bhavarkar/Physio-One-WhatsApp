@@ -117,9 +117,9 @@ class Settings(BaseSettings):
     CLOUD_TASKS_CAMPAIGN_QUEUE: str = "physio-campaigns"
     WORKER_BASE_URL: Optional[str] = None  # public Cloud Run API URL tasks POST to
 
-    # Staging Isolation & Outbound Safeguards (Task 17)
+    # Staging Isolation & Outbound Safeguards (Task 18)
     STAGING_ALLOWLIST_PHONE_NUMBERS: List[str] = []
-    STAGING_MOCK_OUTBOUND: bool = False
+    STAGING_MOCK_OUTBOUND: bool = True  # Defaults to True: mock mode enabled by default
     APPOINTMENTS_READ_ONLY: bool = False
     CAMPAIGNS_DRAFT_ONLY: bool = False
     DEFAULT_AI_INBOUND_MODE: str = "disabled"

@@ -101,4 +101,5 @@ In Google Cloud Run environments:
 - Instant rollback: traffic can be routed back to the prior stable revision in under 5 seconds via `gcloud run services update-traffic --to-revisions=PREV_REV=100`.
 - Dedicated Database Migration Job (`physio-staging-db-migrate`): Runs `alembic upgrade head` as an isolated one-shot job over the Cloud SQL Unix socket before traffic shifts to the new revision, guaranteeing zero-downtime schema evolution.
 - Bounded workers execute via Cloud Run Jobs (`physio-staging-worker-once`) without running persistent idle containers.
+- Out-of-Band Cloud SQL Credential Lifecycle: Database user `physio_admin` is managed out-of-band via Secret Manager and `gcloud sql users create` (or `set-password`). Passwords are never serialized into `terraform.tfstate`. Password rotations are executed by adding a new secret version to `physio-staging-db-password`, running `gcloud sql users set-password`, and restarting Cloud Run revisions.
 

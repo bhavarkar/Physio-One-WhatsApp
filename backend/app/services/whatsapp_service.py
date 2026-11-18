@@ -262,20 +262,8 @@ async def send_outbound_text_message(
     adapter = get_provider_adapter(account)
     clean_to = clean_phone_number(to)
 
-    # 1. Staging Safety Boundary & Mock Mode (Task 17 Phase F)
-    if settings.ENVIRONMENT in ("staging", "testing"):
-        if settings.STAGING_ALLOWLIST_PHONE_NUMBERS and clean_to not in settings.STAGING_ALLOWLIST_PHONE_NUMBERS:
-            logger.warning(
-                "Outbound message suppressed: recipient %s not in STAGING_ALLOWLIST_PHONE_NUMBERS (env=%s)",
-                clean_to,
-                settings.ENVIRONMENT,
-            )
-            return MessageSendResponse(
-                success=False,
-                status=MessageStatus.FAILED.value,
-                error=f"Recipient {clean_to} is not in the approved staging contact allowlist.",
-            )
-
+    # 1. Staging Safety Boundary & Mock Mode (Task 18 Phase 2)
+    if settings.ENVIRONMENT == "staging":
         if settings.STAGING_MOCK_OUTBOUND:
             mock_provider_id = f"mock_staging_{uuid.uuid4().hex[:12]}"
             logger.info(
@@ -289,9 +277,29 @@ async def send_outbound_text_message(
                 raw_response={"status": "simulated_staging", "recipient": clean_to},
             )
         else:
+            # When mock mode is disabled in staging, an explicit allowlist is MANDATORY (deny-all default)
+            if not settings.STAGING_ALLOWLIST_PHONE_NUMBERS:
+                logger.warning(
+                    "Outbound message rejected in staging: STAGING_ALLOWLIST_PHONE_NUMBERS is empty or missing (deny-all default)",
+                )
+                return MessageSendResponse(
+                    success=False,
+                    status=MessageStatus.FAILED.value,
+                    error="Outbound sending in staging is restricted: allowlist is empty (deny-all default).",
+                )
+            if clean_to not in settings.STAGING_ALLOWLIST_PHONE_NUMBERS:
+                logger.warning(
+                    "Outbound message suppressed: recipient %s not in STAGING_ALLOWLIST_PHONE_NUMBERS (env=staging)",
+                    clean_to,
+                )
+                return MessageSendResponse(
+                    success=False,
+                    status=MessageStatus.FAILED.value,
+                    error=f"Recipient {clean_to} is not in the approved staging contact allowlist.",
+                )
             send_result = await adapter.send_text_message(to=clean_to, text=text, preview_url=preview_url)
     else:
-        # Production / live provider dispatch
+        # Production / development / testing direct provider dispatch
         send_result = await adapter.send_text_message(to=clean_to, text=text, preview_url=preview_url)
 
     if not send_result.success:

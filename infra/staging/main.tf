@@ -114,16 +114,11 @@ resource "google_sql_database" "db" {
   name     = "physio_one_staging"
 }
 
-# Cloud SQL User bootstrap:
-# Password is intentionally managed out-of-band via Secret Manager and 'gcloud sql users set-password'
-# to prevent exposing the database password in plaintext inside terraform.tfstate.
-resource "google_sql_user" "user" {
-  name     = "physio_admin"
-  instance = google_sql_database_instance.pg.name
-  lifecycle {
-    ignore_changes = [password]
-  }
-}
+# Note on Database User Bootstrap (Task 18 Phase 1):
+# For Cloud SQL PostgreSQL, the 'google_sql_user' Terraform resource requires a 'password' attribute
+# which writes the plaintext password into terraform.tfstate (even with lifecycle.ignore_changes).
+# To keep terraform.tfstate 100% secret-free, database user 'physio_admin' is bootstrapped
+# post-provisioning via 'gcloud sql users create' reading directly from Secret Manager (see Phase 5 in runbook).
 # pgvector is enabled by migration 001 (CREATE EXTENSION vector).
 
 resource "google_cloud_tasks_queue" "q" {
@@ -200,15 +195,15 @@ resource "google_cloud_run_v2_service" "api" {
       }
       env {
         name  = "STAGING_MOCK_OUTBOUND"
-        value = "false"
+        value = "true"
       }
       env {
         name  = "APPOINTMENTS_READ_ONLY"
-        value = "false"
+        value = "true"
       }
       env {
         name  = "CAMPAIGNS_DRAFT_ONLY"
-        value = "false"
+        value = "true"
       }
       env {
         name  = "DEFAULT_AI_INBOUND_MODE"

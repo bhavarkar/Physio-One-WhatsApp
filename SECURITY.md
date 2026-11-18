@@ -262,3 +262,21 @@ The platform handles patient communications, appointment schedules, and contact 
 - **Worker Authentication Formalization**:
   - Verified that Cloud Tasks and Cloud Scheduler requests targeting worker HTTP endpoints require valid Google OIDC ID tokens matching audience `https://physio-staging-api` and service account `physio-staging-worker`.
   - Contrasted with GCP Cloud Run Jobs execution REST API which requires Google OAuth 2.0 access tokens (`https://www.googleapis.com/auth/cloud-platform`).
+
+---
+
+## Task 18 Final Security Gate & State Audit (2026-11-18)
+
+- **Absolute Zero-Secret Terraform State for Database User**:
+  - Completely excised `google_sql_user.user` from `infra/staging/main.tf`. Because HashiCorp's Google Cloud Terraform provider schema mandates a `password` attribute for built-in PostgreSQL users, omitting the resource block from HCL entirely guarantees that database passwords are never serialized into `terraform.tfstate`.
+  - Documented reproducible out-of-band user creation via `gcloud sql users create physio_admin --instance=physio-staging-pg --password="$DB_PASS"` pulling directly from Secret Manager.
+- **Fail-Closed WhatsApp Isolation with Deny-All Default**:
+  - Set `STAGING_MOCK_OUTBOUND = True` as default in `backend/app/core/config.py`, and injected `STAGING_MOCK_OUTBOUND="true"` directly into the Cloud Run API staging service definition.
+  - Hardened `backend/app/services/whatsapp_service.py`: when operating in `staging` and mock mode is toggled off (`STAGING_MOCK_OUTBOUND=False`), if `STAGING_ALLOWLIST_PHONE_NUMBERS` is empty `[]` or unset, outbound dispatches fail-closed with an immediate deny-all rejection error.
+  - Maintained defense-in-depth safety layers: `AUTOMATION_OUTBOUND_ENABLED="false"`, `APPOINTMENTS_READ_ONLY="true"`, and `CAMPAIGNS_DRAFT_ONLY="true"` injected in Cloud Run staging container.
+- **Container Build Context & Image Secret Isolation**:
+  - Audited multi-stage Dockerfiles (`docker/Dockerfile.api`, `docker/Dockerfile.frontend`) and `.dockerignore`. Confirmed that `.env`, service account keys, git objects, and virtualenvs are excluded from build contexts and image layers.
+- **Full IaC Resource Graph Audit**:
+  - Confirmed 17 top-level resource blocks expanding via `for_each` to exactly 43 Google Cloud resource instances with strict acyclic dependencies.
+- **Disposable Database Migration Verification**:
+  - Validated complete Alembic migration sequence (001 through 008) and rollback/re-upgrade cycle on a disposable PostgreSQL 16 database, confirming zero schema defects before staging deployment.

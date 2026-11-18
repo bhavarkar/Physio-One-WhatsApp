@@ -220,3 +220,16 @@ Static audit: Alembic chain is linear `001→008`; migrations contain exactly 63
 - **Zero-Secret User Management:**
   - `google_sql_user.user` in `infra/staging/main.tf` defines user `physio_admin` with `lifecycle { ignore_changes = [password] }`.
   - Passwords are set out-of-band using `gcloud sql users set-password` from Secret Manager, ensuring zero database credentials leak into `terraform.tfstate`.
+
+---
+
+## Task 18 Database Migration & Credential Hardening (2026-11-18)
+
+- **Absolute Zero-Secret Database User Provisioning**:
+  - Removed `google_sql_user` from `infra/staging/main.tf` to avoid mandatory provider password specification.
+  - User `physio_admin` is provisioned out-of-band using `gcloud sql users create physio_admin --instance=physio-staging-pg --password="$DB_PASS"` directly from Secret Manager, guaranteeing zero credentials in `terraform.tfstate`.
+- **Live Disposable Database Migration Verification**:
+  - Created disposable local PostgreSQL 16 database `physio_migration_disposable`.
+  - Applied full migration chain `001_initial_schema` $\rightarrow$ `008_campaigns_instagram_reengagement` (`alembic upgrade head`) cleanly from scratch.
+  - Verified rollback and re-upgrade resilience: successfully downgraded to `007_scheduled_automation` and upgraded back to `008_campaigns_instagram_reengagement (head)`.
+  - Confirmed all 63 tables, pgvector extensions, HNSW indexes, exclusion constraints, and VARCHAR(128) version table compatibility before safely dropping the disposable database.

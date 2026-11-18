@@ -28,7 +28,7 @@
 
 ## 3. Reviewable List of Resources to Create
 
-The complete infrastructure is declared in `infra/staging/main.tf` (27 resources):
+The complete infrastructure is declared in `infra/staging/main.tf` (17 top-level resource blocks expanding via `for_each` to **43 discrete Google Cloud resource instances**):
 
 | Resource Type | Resource Identifier | Purpose & Specifications |
 |---|---|---|
@@ -39,13 +39,13 @@ The complete infrastructure is declared in `infra/staging/main.tf` (27 resources
 | **IAM Member** | `api_sql` | `roles/cloudsql.client` granted to `physio-staging-api`. |
 | **IAM Member** | `api_tasks` | `roles/cloudtasks.enqueuer` granted to `physio-staging-api`. |
 | **IAM Member** | `worker_run` | `roles/run.invoker` granted to `physio-staging-worker`. |
-| **IAM Member** | `api_read` | `roles/secretmanager.secretAccessor` granted to `physio-staging-api` for all 7 secrets. |
+| **IAM Member** | `api_read` (7 bindings) | `roles/secretmanager.secretAccessor` granted to `physio-staging-api` for all 7 secrets. |
 | **Secret Manager Secrets** | `physio-staging-*` (7 secrets) | `db-password`, `app-secret`, `jwt-secret`, `worker-token`, `whatsapp-token`, `whatsapp-app-secret`, `llm-key`. Containers created by Terraform; versions added out-of-band. |
 | **Cloud SQL Instance** | `physio-staging-pg` | PostgreSQL 16, tier `db-custom-1-3840` (or `db-f1-micro`), 10 GB SSD, Zonal, automated daily backups, `ipv4_enabled = true` with zero authorized networks (zero direct public internet access). |
 | **Cloud SQL Database** | `physio_one_staging` | Application database with pgvector extension enabled. |
-| **Cloud SQL User** | `physio_admin` | Database user managed with `lifecycle { ignore_changes = [password] }` to prevent storing passwords in `terraform.tfstate`. |
+| **Cloud SQL User** | `physio_admin` | Database user created out-of-band via `gcloud sql users create` directly using Secret Manager password to ensure zero secret storage in `terraform.tfstate`. |
 | **Cloud Tasks Queues** | `physio-staging-*` (3 queues) | `inbound`, `automation`, `campaigns`. Rate limits: 5 dispatches/sec, max 10 concurrent. Max 5 retry attempts. |
-| **Cloud Run v2 Service** | `physio-staging-api` | Port 8000, 1 vCPU, 1 GiB RAM, min 0 / max 3 instances. Cloud SQL socket mount at `/cloudsql`. Secret Manager env wiring. `custom_audiences = ["https://physio-staging-api"]`. |
+| **Cloud Run v2 Service** | `physio-staging-api` | Port 8000, 1 vCPU, 1 GiB RAM, min 0 / max 3 instances. Cloud SQL socket mount at `/cloudsql`. Secret Manager env wiring. `custom_audiences = ["https://physio-staging-api"]`. Mock outbound & safety switches injected. |
 | **Cloud Run v2 Service** | `physio-staging-web` | Port 3000, 1 vCPU, 512 MiB RAM, min 0 / max 2 instances. Next.js rewrite server-side proxy to API service. |
 | **Cloud Run v2 IAM** | `api_public` & `frontend_public` | `roles/run.invoker` to `allUsers` for public webhook receipt and browser UI. |
 | **Cloud Run v2 Job (Migration)** | `physio-staging-db-migrate` | Dedicated migration runner (`alembic upgrade head`), 1 vCPU, 1 GiB RAM. Mounts Cloud SQL socket volume. Executed before API serves traffic. |
@@ -185,8 +185,8 @@ terraform plan \
 
 terraform apply staging.tfplan
 
-# Set Cloud SQL user password matching Secret Manager (keeps password out of tfstate)
-gcloud sql users set-password physio_admin \
+# Create Cloud SQL database user directly using Secret Manager password (zero credentials in tfstate)
+gcloud sql users create physio_admin \
   --instance="physio-staging-pg" \
   --password="$DB_PASS"
 
@@ -203,8 +203,8 @@ gcloud run jobs execute physio-staging-db-migrate \
 ## 8. Staging Isolation & Outbound Safeguards
 
 1. **Global Kill Switch:** `AUTOMATION_OUTBOUND_ENABLED=false` is enforced as the default Cloud Run environment variable.
-2. **Synthetic Contact Allowlist:** `STAGING_ALLOWLIST_PHONE_NUMBERS` restricts outbound dispatches to designated clinic test numbers. Any attempt to contact external patient numbers is immediately suppressed and logged.
-3. **Provider Mock Mode:** `STAGING_MOCK_OUTBOUND=true` can be enabled to simulate delivery receipts with `mock_staging_*` IDs without contacting Meta or YCloud external APIs.
+2. **Provider Mock Mode by Default:** `STAGING_MOCK_OUTBOUND=true` is enabled by default in staging. All outbound messages generate synthetic receipts with `mock_staging_*` IDs without contacting Meta or YCloud external APIs.
+3. **Fail-Closed Allowlist:** If mock mode is ever toggled off (`STAGING_MOCK_OUTBOUND=false`), `STAGING_ALLOWLIST_PHONE_NUMBERS` enforces a strict deny-all default. If the allowlist is empty `[]` or unconfigured, 100% of outbound messages are immediately rejected.
 4. **Appointments Read-Only Mode:** `APPOINTMENTS_READ_ONLY=true` blocks any booking or cancellation mutations in staging.
 5. **Campaigns Draft-Only Mode:** `CAMPAIGNS_DRAFT_ONLY=true` prevents campaigns from being scheduled or dispatched.
 6. **No Production Credential Fallback:** Fail-closed design ensures missing credentials result in clean errors rather than silent production failover.

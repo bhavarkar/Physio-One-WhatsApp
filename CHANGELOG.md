@@ -10,6 +10,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0-draft] - 2026-11-18
 
 ### Added
+- **Task 18: Final Staging Security Gate, Terraform State Audit & Deployment Dry Run**:
+  - **Absolute Zero-Secret Terraform State for Cloud SQL User**:
+    - Excised `google_sql_user.user` entirely from `infra/staging/main.tf` because HashiCorp's Google Cloud Terraform provider schema mandates a `password` attribute for built-in PostgreSQL users. Omitting the resource prevents passwords from ever being written into `terraform.tfstate`.
+    - Documented and tested the out-of-band user creation protocol via `gcloud sql users create physio_admin --instance=physio-staging-pg --password="$DB_PASS"` pulling directly from Secret Manager.
+  - **Fail-Closed WhatsApp Isolation with Deny-All Default**:
+    - Configured `STAGING_MOCK_OUTBOUND = True` as default in `backend/app/core/config.py` and injected `STAGING_MOCK_OUTBOUND="true"` directly into the Cloud Run API staging service definition.
+    - Hardened `whatsapp_service.py` to enforce a strict fail-closed deny-all default: when in `staging` and mock mode is toggled off (`STAGING_MOCK_OUTBOUND=False`), if `STAGING_ALLOWLIST_PHONE_NUMBERS` is empty `[]` or unconfigured, 100% of outbound messages are immediately rejected.
+    - Preserved defense-in-depth safety defaults in Cloud Run staging container: `AUTOMATION_OUTBOUND_ENABLED="false"`, `APPOINTMENTS_READ_ONLY="true"`, and `CAMPAIGNS_DRAFT_ONLY="true"`.
+  - **Container Build Context & Image Credential Audit**:
+    - Audited multi-stage Dockerfiles (`docker/Dockerfile.api`, `docker/Dockerfile.frontend`) and `.dockerignore`. Verified that `.env`, service account keys, git objects, and virtualenvs are excluded from build contexts and image layers.
+  - **Terraform Resource Graph Audit (17 Blocks / 43 Instances)**:
+    - Audited full Terraform DAG. 17 declared top-level resource blocks expand via `for_each` to exactly 43 Google Cloud resource instances with strict acyclic dependencies.
+  - **Live Disposable Database Migration Verification**:
+    - Verified clean Alembic execution `001→008` (head) and rollback/re-upgrade sequence on isolated disposable database `physio_migration_disposable`.
+  - **Automated Verification Test Suite**:
+    - Added 6 targeted test cases to `backend/tests/test_staging_deployment_blockers_remediation.py` (total 18 tests in that module).
+    - **Backend Test Suite:** 225 passed / 225 tests (100% pass rate in 71.70s).
+    - **Frontend Test Suite:** 53 passed / 53 tests (12 Jest suites in 21.77s).
+    - **TypeScript Compilation:** 0 errors (`tsc --noEmit`).
+    - **Next.js Production Build:** 18/18 static routes compiled cleanly.
+    - **Terraform Staging IaC:** 43 resources, formatted and valid (`terraform validate` exit 0).
+  - **Deployment Boundary Preserved**:
+    - Stopped at the Operator Approval Gate. Zero billable GCP resources created. Zero live WhatsApp messages sent.
+
 - **Task 17: Resolve Staging Deployment Blockers and Prepare a Safe Google Cloud Launch**:
   - **Dedicated Database Migration Cloud Run Job (`physio-staging-db-migrate`)**:
     - Declared dedicated `google_cloud_run_v2_job.db_migrate` in `infra/staging/main.tf` executing `["alembic", "upgrade", "head"]` over the Cloud SQL Unix socket volume (`/cloudsql/<connection_name>`) with least-privilege credentials.

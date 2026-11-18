@@ -302,3 +302,123 @@ async def test_eligibility_service_honors_kill_switch():
     eligibility = await EligibilityService.evaluate_job_eligibility(mock_db, mock_job, db_settings)
     assert eligibility.eligible is False
     assert eligibility.suppression_reason == "kill_switch_disabled"
+
+
+# ==============================================================================
+# 6. Task 18 Final Security & Staging Isolation Tests
+# ==============================================================================
+
+@pytest.mark.asyncio
+async def test_staging_missing_allowlist_fails_closed(monkeypatch):
+    """Verify that when mock mode is False, an empty allowlist fails closed (deny-all default)."""
+    monkeypatch.setattr(settings, "ENVIRONMENT", "staging")
+    monkeypatch.setattr(settings, "STAGING_MOCK_OUTBOUND", False)
+    monkeypatch.setattr(settings, "STAGING_ALLOWLIST_PHONE_NUMBERS", [])  # Empty allowlist
+
+    mock_db = AsyncMock()
+    mock_account = WhatsAppAccount(
+        id=uuid.uuid4(),
+        provider="meta",
+        phone_number_id="123456",
+        is_active=True,
+        access_token_encrypted="encrypted_tok",
+    )
+    with patch("app.services.whatsapp_service.get_whatsapp_account_by_id", return_value=mock_account):
+        with patch("app.services.whatsapp_service.get_provider_adapter"):
+            resp = await send_outbound_text_message(
+                db=mock_db,
+                account_id=mock_account.id,
+                to="+919876543210",
+                text="Test message",
+            )
+            assert resp.success is False
+            assert "deny-all default" in resp.error
+
+
+@pytest.mark.asyncio
+async def test_staging_manual_send_safety_enforced(monkeypatch):
+    """Verify that manual staff inbox replies are subject to the same staging allowlist protections."""
+    monkeypatch.setattr(settings, "ENVIRONMENT", "staging")
+    monkeypatch.setattr(settings, "STAGING_MOCK_OUTBOUND", False)
+    monkeypatch.setattr(settings, "STAGING_ALLOWLIST_PHONE_NUMBERS", ["919876543210"])
+
+    mock_db = AsyncMock()
+    mock_account = WhatsAppAccount(
+        id=uuid.uuid4(),
+        provider="meta",
+        phone_number_id="123456",
+        is_active=True,
+        access_token_encrypted="encrypted_tok",
+    )
+    with patch("app.services.whatsapp_service.get_whatsapp_account_by_id", return_value=mock_account):
+        with patch("app.services.whatsapp_service.get_provider_adapter"):
+            # Attempt manual reply to real patient phone number not on test allowlist
+            resp = await send_outbound_text_message(
+                db=mock_db,
+                account_id=mock_account.id,
+                to="+919111122222",  # Unlisted patient
+                text="Staff manual reply from dashboard",
+            )
+            assert resp.success is False
+            assert "allowlist" in resp.error.lower()
+
+
+def test_terraform_no_plaintext_passwords_in_hcl():
+    """Verify infra/staging/main.tf and staging.tfvars.example contain no plaintext secret credentials."""
+    import os
+    tf_path = os.path.join(os.path.dirname(__file__), "..", "..", "infra", "staging", "main.tf")
+    tfvars_path = os.path.join(os.path.dirname(__file__), "..", "..", "infra", "staging", "staging.tfvars.example")
+
+    with open(tf_path, "r", encoding="utf-8") as f:
+        tf_content = f.read()
+
+    with open(tfvars_path, "r", encoding="utf-8") as f:
+        tfvars_content = f.read()
+
+    # Verify google_sql_user does not manage passwords in HCL (prevents tfstate password leakage)
+    assert 'resource "google_sql_user"' not in tf_content
+    # Verify Secret Manager secret versions are not statically embedded in Terraform
+    assert 'resource "google_secret_manager_secret_version"' not in tf_content
+    # Verify no raw password assignments in tfvars example
+    assert "password" not in tfvars_content.lower()
+
+
+def test_migration_job_hcl_configuration():
+    """Verify the dedicated migration job in main.tf runs 'alembic upgrade head' over Cloud SQL socket."""
+    import os
+    tf_path = os.path.join(os.path.dirname(__file__), "..", "..", "infra", "staging", "main.tf")
+    with open(tf_path, "r", encoding="utf-8") as f:
+        tf_content = f.read()
+
+    assert 'resource "google_cloud_run_v2_job" "db_migrate"' in tf_content
+    assert 'command = ["alembic", "upgrade", "head"]' in tf_content
+    assert 'mount_path = "/cloudsql"' in tf_content
+    assert 'POSTGRES_USER' in tf_content
+    assert 'physio_admin' in tf_content
+
+
+def test_scheduler_targets_use_post_and_oidc():
+    """Verify Cloud Scheduler jobs use HTTP POST and Google OIDC tokens with the custom API audience."""
+    import os
+    tf_path = os.path.join(os.path.dirname(__file__), "..", "..", "infra", "staging", "main.tf")
+    with open(tf_path, "r", encoding="utf-8") as f:
+        tf_content = f.read()
+
+    assert 'http_method = "POST"' in tf_content
+    assert 'oidc_token' in tf_content
+    assert 'audience              = "https://${local.p}-api"' in tf_content
+
+
+def test_cloud_run_staging_environment_defaults():
+    """Verify Cloud Run staging environment has all fail-safe defaults enforced in Terraform."""
+    import os
+    tf_path = os.path.join(os.path.dirname(__file__), "..", "..", "infra", "staging", "main.tf")
+    with open(tf_path, "r", encoding="utf-8") as f:
+        tf_content = f.read()
+
+    assert 'name  = "STAGING_MOCK_OUTBOUND"\n        value = "true"' in tf_content
+    assert 'name  = "APPOINTMENTS_READ_ONLY"\n        value = "true"' in tf_content
+    assert 'name  = "CAMPAIGNS_DRAFT_ONLY"\n        value = "true"' in tf_content
+    assert 'name  = "AUTOMATION_OUTBOUND_ENABLED"\n        value = "false"' in tf_content
+    assert 'name  = "DEFAULT_AI_INBOUND_MODE"\n        value = "disabled"' in tf_content
+

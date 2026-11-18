@@ -4,7 +4,7 @@
 **Organization:** Physio One Clinic (Single Organization Edition)  
 **Region:** `asia-south1` (Mumbai)  
 **Target Architecture:** Cloud Run (API & Frontend), Cloud SQL PostgreSQL 16 + pgvector, Cloud Tasks, Cloud Scheduler, Secret Manager  
-**Estimated Monthly Cost:** USD 11–18/month (db-f1-micro + scale-to-zero compute)
+**Estimated Monthly Cost:** USD 10.20–21.40/mo (`db-f1-micro`) or USD 25.70–39.40/mo (`db-custom-1-3840`) in `asia-south1`
 
 ---
 
@@ -14,13 +14,13 @@
 > **Mandatory Rule:** Do **NOT** deploy to Google Cloud, run `terraform apply`, or create billable GCP resources without explicit operator sign-off and approval. Production credentials must never be used in staging, and no real WhatsApp messages may be dispatched to actual patients during staging verification.
 
 ### Pre-Deployment Checklist
-- [x] Backend tests pass: 219/219 tests passing (100% pass rate).
+- [x] Backend tests pass: 225/225 tests passing (100% pass rate).
 - [x] Frontend tests pass: 53/53 tests passing across 12 test suites.
 - [x] TypeScript typecheck: 0 errors (`tsc --noEmit`).
 - [x] Next.js production build: 18/18 static routes compiled cleanly.
 - [x] Docker Compose local verification: PostgreSQL 16 + pgvector, API, Worker, and Frontend operational.
-- [x] Terraform staging IaC validated and formatted (27 resources, acyclic bootstrap).
-- [x] Safety defaults verified (`AUTOMATION_OUTBOUND_ENABLED=false`, AI Inbound disabled mode).
+- [x] Terraform staging IaC validated and formatted (17 top-level resource blocks expanding to 43 resource instances, acyclic bootstrap).
+- [x] Safety defaults verified (`AUTOMATION_OUTBOUND_ENABLED=false`, `STAGING_MOCK_OUTBOUND=true`, fail-closed deny-all allowlist, AI Inbound disabled mode).
 - [x] Dedicated migration job declared (`physio-staging-db-migrate` running `alembic upgrade head`).
 - [x] Connection budget verified for staging Cloud SQL tier (`db-custom-1-3840` / `db-f1-micro`).
 
@@ -145,8 +145,8 @@ terraform plan \
 # Apply after explicit operator confirmation
 terraform apply staging.tfplan
 
-# Set Cloud SQL user password matching Secret Manager
-gcloud sql users set-password physio_admin \
+# Create Cloud SQL database user directly using Secret Manager password (zero credentials in tfstate)
+gcloud sql users create physio_admin \
   --instance="physio-staging-pg" \
   --password="$DB_PASS"
 ```

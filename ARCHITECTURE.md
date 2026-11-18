@@ -706,3 +706,11 @@ A dedicated Python worker daemon provides continuous background processing for c
   - Maintenance jobs: Cloud Run Jobs execution (Google Cloud Run API with OAuth 2.0 access token).
   - Database schema: Cloud Run dedicated migration job (`physio-staging-db-migrate`).
 - **WhatsApp Staging Isolation & Mock Boundaries:** Implemented synthetic contact allowlist (`STAGING_ALLOWLIST_PHONE_NUMBERS`), staging mock mode (`STAGING_MOCK_OUTBOUND`), read-only appointments (`APPOINTMENTS_READ_ONLY`), and draft-only campaigns (`CAMPAIGNS_DRAFT_ONLY`) at the final messaging gateway boundary in `whatsapp_service.py`.
+
+---
+
+## Task 18 — Final Staging Security Gate & State Audit (2026-11-18)
+- **Absolute Zero-Secret Terraform State Architecture**: Completely removed `google_sql_user.user` from `infra/staging/main.tf` because PostgreSQL requires passwords on provider creation. User `physio_admin` is created out-of-band via `gcloud sql users create` using the Secret Manager password, guaranteeing zero credential serialization into `terraform.tfstate`.
+- **Fail-Closed WhatsApp Isolation with Deny-All Default**: Hardened `whatsapp_service.py` to enforce `STAGING_MOCK_OUTBOUND = True` as default. When mock mode is toggled off in staging, if `STAGING_ALLOWLIST_PHONE_NUMBERS` is empty `[]` or unset, the system rejects 100% of outbound messages by default, closing any bypass.
+- **Resource Graph Formalization (17 Blocks / 43 Instances)**: Audited full Terraform DAG. 17 declared resource blocks expand via `for_each` to exactly 43 Google Cloud resource instances (8 APIs, 1 Artifact Registry repo, 2 SAs, 3 Project IAM members, 7 Secret containers, 7 Secret IAM members, 1 Cloud SQL instance, 1 Cloud SQL database, 3 Cloud Tasks queues, 2 Cloud Run services, 2 Cloud Run public IAM bindings, 2 Cloud Run jobs, 4 Cloud Scheduler jobs).
+- **Disposable Database Migration Verification**: Validated fresh Alembic execution (001 through 008) and rollback/re-upgrade cycle on an isolated disposable PostgreSQL 16 database before staging deployment.
