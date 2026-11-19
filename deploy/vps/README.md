@@ -280,20 +280,37 @@ When deploying to a Hostinger VPS that already runs **n8n** behind host Nginx (e
 ### 9.1 Architectural Adaptation (`compose.hostinger.yaml`)
 - **No Caddy Container:** Host Nginx owns ports 80 & 443.
 - **Host Loopback Ingress:** Frontend is published strictly to `127.0.0.1:3000` and API to `127.0.0.1:8000`.
-- **Host Database Integration:** Connects to host PostgreSQL 16 via `host.docker.internal:5432` (`host-gateway`), eliminating duplicate database container overhead.
+- **Host Database Integration (Unix Domain Socket):** Connects to host PostgreSQL 16 via mounted `/var/run/postgresql` Unix socket (`host=/var/run/postgresql`), completely avoiding TCP network port exposure and resolving bridge loopback routing failure.
 - **pgvector 0.6.0 Verification:** Fully compatible with 1536-dimensional embeddings and HNSW cosine indexes (`vector_cosine_ops`).
 - **Resource Limits:** Capped at 1.1 GB total RAM (API 400M, Worker 350M, Frontend 350M), leaving ~1.9 GB free on a 3.8 GB VPS.
+- **Build Efficiency:** Supports `--skip-build` to pull or use pre-built images, protecting the 1 vCPU host from build-induced CPU spikes and memory exhaustion.
 
 ### 9.2 Execution Steps
-1. Provision host database:
+1. Provision host database with least-privilege `physio_user`:
    ```bash
-   sudo -u postgres psql -f deploy/vps/database/init_host_postgres.sql
+   sudo -u postgres psql -v physio_password='YOUR_SECURE_PASSWORD' -f deploy/vps/database/init_host_postgres.sql
+   ```
+2. Configure `pg_hba.conf` to allow password authentication over the Unix domain socket:
+   ```bash
+   # Add this line immediately BEFORE 'local all all peer' in /etc/postgresql/16/main/pg_hba.conf:
+   # local   physio_db   physio_user   scram-sha-256
+   sudo systemctl reload postgresql
+   ```
+3. Verify database extensions, role privileges, and HNSW indexing:
+   ```bash
    sudo -u postgres psql -d physio_db -f deploy/vps/database/verify_host_postgres.sql
    ```
-2. Configure `.env` with `DATABASE_URL=postgresql+asyncpg://physio_user:***@host.docker.internal:5432/physio_db`.
-3. Launch container stack:
+4. Configure `.env` with:
+   ```text
+   DATABASE_URL=postgresql+asyncpg://physio_user:***@/physio_db?host=/var/run/postgresql
+   DATABASE_URL_SYNC=postgresql+psycopg2://physio_user:***@/physio_db?host=/var/run/postgresql
+   ```
+5. Launch container stack (with automated backup, migrations, and health checks):
    ```bash
    ./scripts/deploy_hostinger.sh
+   # Or with pre-built images:
+   ./scripts/deploy_hostinger.sh --skip-build
    ```
-4. Install and enable host Nginx virtual host as detailed in [deploy/vps/nginx/README.md](./nginx/README.md).
+6. Install and enable host Nginx virtual host as detailed in [deploy/vps/nginx/README.md](./nginx/README.md).
+
 

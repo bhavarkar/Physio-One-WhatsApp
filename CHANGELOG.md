@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.0-draft] - 2026-11-19
+
+### Added
+- **Task 23.1: Hostinger Deployment Preflight Remediation (PostgreSQL Unix Socket, Least Privilege & Preflight Hardening)**:
+  - **Root-Cause Analysis & Unix Domain Socket Integration**:
+    - Discovered root cause of loopback-only PostgreSQL connectivity: host PostgreSQL 16 listens on `127.0.0.1:5432`, but container `host.docker.internal` points to bridge gateway IP (`172.17.0.1`), resulting in TCP connection refusal.
+    - Remediated by mounting `${POSTGRES_SOCKET_HOST_DIR:-/var/run/postgresql}:/var/run/postgresql:rw` into `api`, `worker`, and `migration` containers in `deploy/vps/compose.hostinger.yaml`.
+    - Configured standard Unix socket database URLs: `postgresql+asyncpg://physio_user:***@/physio_db?host=/var/run/postgresql` and `postgresql+psycopg2://...`.
+    - Documented `local physio_db physio_user scram-sha-256` rule in `/etc/postgresql/16/main/pg_hba.conf` to allow container non-root user `appuser` (UID 10001) to authenticate via password over the Unix socket.
+  - **Database Provisioning & Least Privilege Hardening**:
+    - Hardened `deploy/vps/database/init_host_postgres.sql`: eliminated hardcoded passwords; requires dynamic `-v physio_password='...'`; enforces `NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION` on `physio_user`; grants database and `public` schema ownership to `physio_user`.
+    - Hardened `deploy/vps/database/verify_host_postgres.sql`: verifies `rolsuper=false`, checks `vector 0.6.0` and `btree_gist` extensions, and executes 1536-dimensional HNSW cosine index test.
+  - **Deployment Script Reliability**:
+    - Hardened `deploy_hostinger.sh`: auto-detects Unix socket `/var/run/postgresql/.s.PGSQL.5432` or TCP; enforces pre-deploy backup gate; supports `--skip-build` to deploy pre-built images; executes Alembic migrations before starting containers; enforces loopback health checks; triggers automatic rollback on health check failure.
+    - Hardened `backup_host_db.sh`: safely detects if `physio_db` exists; skips pre-deploy backup gracefully on clean install; halts deployment if existing database backup fails; verifies archive with `gzip -t`.
+    - Hardened `rollback_hostinger.sh`: re-asserts `AUTOMATION_OUTBOUND_ENABLED=False`; restarts containers; verifies health; guarantees zero automatic schema down-migrations.
+    - Hardened `restore_host_db.sh`: validates archive with `gzip -t`; enforces `--confirm-restore`; supports Unix domain socket; verifies restored table count $\ge 63$.
+  - **1 vCPU Resource Hazard Mitigation**:
+    - Identified Next.js build overhead (100% CPU spike, ~1.2 GB RAM consumption) on a 1 vCPU host; added `--skip-build` to enable deploying pre-built images off-server.
+  - **Automated Verification Suite**:
+    - Authored `backend/tests/test_vps_hostinger_remediation.py` with 8 comprehensive tests covering Unix socket resolution, loopback port bindings, absence of Caddy, database least-privilege, and outbound fail-closed defaults. Full backend suite: 263/263 passed (100%).
+
 ## [1.0.0-draft] - 2026-11-18
 
 ### Added

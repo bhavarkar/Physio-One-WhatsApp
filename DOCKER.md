@@ -99,7 +99,7 @@ docker compose up -d
 
 ---
 
-## 8. Task 23 — Hostinger KVM 1 Coexistence Stack (`deploy/vps/compose.hostinger.yaml`)
+## 8. Task 23 & 23.1 — Hostinger KVM 1 Coexistence Stack (`deploy/vps/compose.hostinger.yaml`)
 
 - Engineered for VPS environments with pre-existing host Nginx and host PostgreSQL 16 (e.g. running alongside `n8n.dataagent.in`).
 - **No Caddy Container**: Ingress handled by host Nginx.
@@ -107,12 +107,16 @@ docker compose up -d
   - API: `127.0.0.1:8000:8000`
   - Frontend: `127.0.0.1:3000:3000`
   - Prevents Docker from manipulating iptables and exposing ports on `0.0.0.0`.
-- **Host Gateway Networking**:
-  - Uses `extra_hosts: ["host.docker.internal:host-gateway"]` to connect directly to host PostgreSQL 16 at `host.docker.internal:5432`.
+- **Unix Domain Socket Integration (Task 23.1 Remediation)**:
+  - Mounts `${POSTGRES_SOCKET_HOST_DIR:-/var/run/postgresql}:/var/run/postgresql:rw` into `api`, `worker`, and `migration` services.
+  - Connects using `DATABASE_URL=postgresql+asyncpg://physio_user:***@/physio_db?host=/var/run/postgresql`.
+  - Completely eliminates network TCP port exposure and bypasses Docker bridge gateway routing failures to loopback-only PostgreSQL daemons.
 - **Resource Constraints (1 vCPU, 4 GB RAM)**:
   - API: 400 MB limit, 0.50 CPU limit.
   - Worker: 350 MB limit, 0.30 CPU limit.
   - Frontend: 350 MB limit, 0.40 CPU limit.
   - Total container limits: 1,100 MB (~1.1 GB).
+  - Supports `--skip-build` to deploy pre-built images without triggering 1 vCPU / RAM build exhaustion.
 - **Optional Containerized DB Profile**: Includes `postgres` service with profile `container-db` as a zero-host-port container fallback.
+
 

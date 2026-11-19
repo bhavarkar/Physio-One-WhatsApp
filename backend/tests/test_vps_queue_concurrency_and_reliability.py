@@ -370,6 +370,7 @@ async def test_quiet_hour_deferral_enforcement(async_session, setup_queue_enviro
         locked_until=now_utc + timedelta(seconds=120),
         rendered_message="Quiet hours test message",
         idempotency_key=f"idemp_quiet_{uuid.uuid4().hex[:8]}",
+        payload={"test_mode": True},
     )
     async_session.add(job)
     await async_session.commit()
@@ -386,6 +387,7 @@ async def test_quiet_hour_deferral_enforcement(async_session, setup_queue_enviro
         job,
         env["settings"],
         mock_dispatcher=tracking_dispatcher,
+        now=now_utc,
     )
 
     # Must be deferred/rescheduled without dispatching WhatsApp message

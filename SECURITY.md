@@ -377,4 +377,23 @@ The platform handles patient communications, appointment schedules, and contact 
   - `AUTOMATION_OUTBOUND_ENABLED=false` and `STAGING_MOCK_OUTBOUND=true` preserved in `compose.hostinger.yaml`.
   - Outbound dispatches remain blocked by default until explicit operator activation.
 
+---
+
+## Task 23.1 Hostinger Preflight Security Remediation (2026-11-19)
+
+- **Unix Domain Socket Isolation (Zero Network Exposure)**:
+  - Eliminated the risk of exposing PostgreSQL port 5432 or attempting Docker bridge networking across loopback interfaces by mounting the host Unix domain socket `/var/run/postgresql` into containers.
+  - Zero database ports are open to the network or exposed via Docker bridge NAT.
+- **PostgreSQL Least Privilege & Password Security**:
+  - `init_host_postgres.sql`: Removed hardcoded passwords; requires dynamic `-v physio_password='...'`; enforces `NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION` on `physio_user`.
+  - `pg_hba.conf` local rule `local physio_db physio_user scram-sha-256` restricts socket access strictly to the dedicated `physio_user` for database `physio_db`.
+  - `verify_host_postgres.sql` audits `rolsuper=false` before permitting migrations.
+- **Fail-Closed Deployment & Rollback Invariants**:
+  - Pre-deployment backup verification: deployment halts immediately if database backup fails.
+  - Health check verification: `deploy_hostinger.sh` runs loopback health probes on `http://127.0.0.1:8000/health`; any failure triggers immediate automatic rollback.
+  - Rollback safety: `rollback_hostinger.sh` re-asserts `AUTOMATION_OUTBOUND_ENABLED=False` and never down-migrates database schemas.
+- **1 vCPU Resource Starvation Defense**:
+  - Documented Next.js build overhead (100% CPU spike, ~1.2 GB RAM consumption) on a 1 vCPU host; added `--skip-build` to enable off-server build and image deployment.
+
+
 

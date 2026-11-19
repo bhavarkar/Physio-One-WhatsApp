@@ -33,14 +33,20 @@
 
 ### Phase B: Host PostgreSQL 16 Database Initialization
 1. Log in to the VPS via SSH as your non-root user (`physioadmin`).
-2. Run the database provisioning script:
+2. Run the database provisioning script with your chosen high-entropy password:
    ```bash
    # From the repository root on the VPS:
    cd /opt/physio/app/deploy/vps
-   sudo -u postgres psql -f database/init_host_postgres.sql
+   sudo -u postgres psql -v physio_password='YOUR_SECURE_PASSWORD' -f database/init_host_postgres.sql
    ```
-   *(Creates database `physio_db`, role `physio_user`, and installs extensions `vector 0.6.0` and `btree_gist`).*
-3. Verify pgvector functionality and HNSW indexing:
+   *(Creates database `physio_db`, role `physio_user` with NOSUPERUSER permissions, sets schema ownership, and installs extensions `vector 0.6.0` and `btree_gist`).*
+3. Configure `pg_hba.conf` to allow password authentication over the Unix domain socket:
+   ```bash
+   # Add this line immediately BEFORE 'local all all peer' in /etc/postgresql/16/main/pg_hba.conf:
+   # local   physio_db   physio_user   scram-sha-256
+   sudo systemctl reload postgresql
+   ```
+4. Verify pgvector functionality and HNSW indexing:
    ```bash
    sudo -u postgres psql -d physio_db -f database/verify_host_postgres.sql
    ```
@@ -56,7 +62,8 @@
    ```
 2. Populate the `.env` file with generated credentials:
    - `POSTGRES_PASSWORD`: Password configured in `init_host_postgres.sql`
-   - `DATABASE_URL`: `postgresql+asyncpg://physio_user:YOUR_PASSWORD@host.docker.internal:5432/physio_db`
+   - `DATABASE_URL`: `postgresql+asyncpg://physio_user:YOUR_PASSWORD@/physio_db?host=/var/run/postgresql`
+   - `DATABASE_URL_SYNC`: `postgresql+psycopg2://physio_user:YOUR_PASSWORD@/physio_db?host=/var/run/postgresql`
    - `APP_SECRET`: Generated 32-character hex key
    - `JWT_SECRET_KEY`: Generated 32-character hex key
    - `AUTOMATION_WORKER_SECRET_TOKEN`: Generated 24-character hex key
@@ -72,11 +79,13 @@
    chmod +x scripts/*.sh
    ./scripts/deploy_hostinger.sh --dry-run
    ```
-2. If dry-run passes, execute the deployment:
+2. If dry-run passes, execute the deployment (use `--skip-build` if deploying pre-built images to save 1 vCPU / RAM):
    ```bash
    ./scripts/deploy_hostinger.sh
+   # OR with pre-built images:
+   # ./scripts/deploy_hostinger.sh --skip-build
    ```
-   *(Builds images, executes Alembic migrations to head, and starts `api`, `worker`, and `frontend` bound to `127.0.0.1`).*
+   *(Creates pre-deployment database backup, executes Alembic migrations to head, and starts `api`, `worker`, and `frontend` bound to `127.0.0.1` with health checks).*
 
 3. Verify local container health:
    ```bash

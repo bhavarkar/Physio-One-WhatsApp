@@ -118,9 +118,10 @@ class AutomationWorkerService:
         job: AutomationScheduledJob,
         settings: AutomationSettings,
         mock_dispatcher: Optional[Any] = None,
+        now: Optional[datetime] = None,
     ) -> Dict[str, Any]:
         """Process a locked automation job through eligibility, rendering, and dispatch."""
-        now_utc = datetime.now(timezone.utc)
+        now_utc = now or datetime.now(timezone.utc)
         job_id = job.id
         contact_id = job.contact_id
         rule_id = job.rule_id

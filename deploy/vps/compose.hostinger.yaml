@@ -17,10 +17,12 @@ services:
       # NEVER bind to 0.0.0.0 on a host with inactive UFW!
       - "127.0.0.1:8000:8000"
     extra_hosts:
-      # Allows containers to connect to host PostgreSQL 16 on 127.0.0.1:5432 / docker0 gateway
+      # Fallback: Allows connecting to host services if TCP is preferred
       - "host.docker.internal:host-gateway"
     volumes:
       - physio_media_storage:/app/storage
+      # Primary strategy: Direct Unix domain socket mount to host PostgreSQL
+      - ${POSTGRES_SOCKET_HOST_DIR:-/var/run/postgresql}:/var/run/postgresql:rw
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - APP_NAME=Physio One WhatsApp AI Agent
@@ -30,8 +32,10 @@ services:
       - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=120
       - AUTOMATION_WORKER_SECRET_TOKEN=${AUTOMATION_WORKER_SECRET_TOKEN}
       - REQUIRE_OIDC_IN_PRODUCTION=false
-      # Connects to host PostgreSQL 16 by default via host-gateway
-      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://physio_user:${POSTGRES_PASSWORD}@host.docker.internal:5432/physio_db}
+      # Primary: Connects to host PostgreSQL 16 via Unix domain socket (zero TCP network exposure)
+      # Fallback: Can be overridden in .env to TCP (host.docker.internal:5432)
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://physio_user:${POSTGRES_PASSWORD}@/physio_db?host=/var/run/postgresql}
+      - DATABASE_URL_SYNC=${DATABASE_URL_SYNC:-postgresql+psycopg2://physio_user:${POSTGRES_PASSWORD}@/physio_db?host=/var/run/postgresql}
       - POSTGRES_POOL_SIZE=${POSTGRES_POOL_SIZE:-3}
       - POSTGRES_MAX_OVERFLOW=${POSTGRES_MAX_OVERFLOW:-5}
       - POSTGRES_POOL_TIMEOUT=30
@@ -86,13 +90,16 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - physio_media_storage:/app/storage
+      # Primary strategy: Direct Unix domain socket mount to host PostgreSQL
+      - ${POSTGRES_SOCKET_HOST_DIR:-/var/run/postgresql}:/var/run/postgresql:rw
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - APP_SECRET=${APP_SECRET}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - AUTOMATION_WORKER_SECRET_TOKEN=${AUTOMATION_WORKER_SECRET_TOKEN}
       - REQUIRE_OIDC_IN_PRODUCTION=false
-      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://physio_user:${POSTGRES_PASSWORD}@host.docker.internal:5432/physio_db}
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://physio_user:${POSTGRES_PASSWORD}@/physio_db?host=/var/run/postgresql}
+      - DATABASE_URL_SYNC=${DATABASE_URL_SYNC:-postgresql+psycopg2://physio_user:${POSTGRES_PASSWORD}@/physio_db?host=/var/run/postgresql}
       - POSTGRES_POOL_SIZE=2
       - POSTGRES_MAX_OVERFLOW=3
       - POSTGRES_POOL_TIMEOUT=30
@@ -171,8 +178,11 @@ services:
     command: ["alembic", "upgrade", "head"]
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      - ${POSTGRES_SOCKET_HOST_DIR:-/var/run/postgresql}:/var/run/postgresql:rw
     environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://physio_user:${POSTGRES_PASSWORD}@host.docker.internal:5432/physio_db}
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://physio_user:${POSTGRES_PASSWORD}@/physio_db?host=/var/run/postgresql}
+      - DATABASE_URL_SYNC=${DATABASE_URL_SYNC:-postgresql+psycopg2://physio_user:${POSTGRES_PASSWORD}@/physio_db?host=/var/run/postgresql}
       - APP_SECRET=${APP_SECRET}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
     networks:

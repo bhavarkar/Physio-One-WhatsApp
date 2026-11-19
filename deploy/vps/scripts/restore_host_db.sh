@@ -45,14 +45,14 @@ pass()  { echo -e "\033[0;32m[PASS]\033[0m  $*"; }
 warn()  { echo -e "\033[0;33m[WARN]\033[0m  $*"; }
 fail()  { echo -e "\033[0;31m[FAIL]\033[0m  $*" >&2; exit 1; }
 
-# 1. Validate File
+# 1. Validate File Existence
 if [[ ! -f "${BACKUP_FILE}" ]]; then
     fail "Backup file '${BACKUP_FILE}' does not exist!"
 fi
 
 info "Testing gzip integrity..."
 if ! gzip -t "${BACKUP_FILE}"; then
-    fail "Gzip integrity check failed for '${BACKUP_FILE}'."
+    fail "Gzip integrity check failed for '${BACKUP_FILE}'. Archive is corrupt."
 fi
 pass "Archive integrity verified."
 
@@ -72,11 +72,19 @@ if [[ "${DRY_RUN}" == "true" ]]; then
     exit 0
 fi
 
-# 3. Execute Restore
+# 3. Detect Socket vs TCP
+PG_HOST_ARG=""
+if [[ -S "/var/run/postgresql/.s.PGSQL.5432" ]]; then
+    PG_HOST_ARG="-h /var/run/postgresql"
+elif command -v pg_isready >/dev/null 2>&1 && pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1; then
+    PG_HOST_ARG="-h 127.0.0.1"
+fi
+
+# 4. Execute Restore
 info "Restoring database from compressed archive..."
-if command -v PGPASSWORD >/dev/null 2>&1 || [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
-    export PGPASSWORD="${POSTGRES_PASSWORD:-}"
-    zcat "${BACKUP_FILE}" | psql -h 127.0.0.1 -p 5432 -U "${POSTGRES_USER:-physio_user}" -d "${TARGET_DB}" --quiet -v ON_ERROR_STOP=1
+if command -v PGPASSWORD >/dev/null 2>&1 && [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
+    export PGPASSWORD="${POSTGRES_PASSWORD}"
+    zcat "${BACKUP_FILE}" | psql ${PG_HOST_ARG} -p 5432 -U "${POSTGRES_USER:-physio_user}" -d "${TARGET_DB}" --quiet -v ON_ERROR_STOP=1
     unset PGPASSWORD
 else
     zcat "${BACKUP_FILE}" | sudo -u postgres psql -d "${TARGET_DB}" --quiet -v ON_ERROR_STOP=1
@@ -84,9 +92,9 @@ fi
 
 pass "Database restored successfully."
 
-# 4. Verify Table Count Post-Restore
+# 5. Verify Table Count Post-Restore
 info "Verifying restored schema table count..."
-TABLE_COUNT=$(sudo -u postgres psql -d "${TARGET_DB}" -t -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';" | tr -d '[:space:]')
+TABLE_COUNT=$(sudo -u postgres psql -d "${TARGET_DB}" -t -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';" 2>/dev/null | tr -d '[:space:]')
 info "Verified restored public tables count: ${TABLE_COUNT}"
 
 if (( TABLE_COUNT >= 63 )); then

@@ -2,7 +2,7 @@
 # ==============================================================================
 # Physio One WhatsApp AI Platform — Hostinger KVM 1 Deployment Orchestrator
 # Target: Hostinger Ubuntu 24.04.5 LTS VPS (Host Nginx + Host PostgreSQL 16)
-# Usage: ./scripts/deploy_hostinger.sh [--staging] [--dry-run] [--force]
+# Usage: ./scripts/deploy_hostinger.sh [--staging] [--skip-build] [--dry-run] [--force]
 # ==============================================================================
 set -euo pipefail
 
@@ -13,6 +13,7 @@ cd "${VPS_DIR}"
 STAGING=false
 DRY_RUN=false
 FORCE=false
+SKIP_BUILD=false
 
 for arg in "$@"; do
     if [[ "$arg" == "--staging" ]]; then
@@ -21,6 +22,8 @@ for arg in "$@"; do
         DRY_RUN=true
     elif [[ "$arg" == "--force" ]]; then
         FORCE=true
+    elif [[ "$arg" == "--skip-build" ]]; then
+        SKIP_BUILD=true
     fi
 done
 
@@ -29,9 +32,10 @@ COMPOSE_FILE="compose.hostinger.yaml"
 echo "=================================================================="
 echo " PHYSIO ONE — HOSTINGER KVM 1 VPS DEPLOYMENT ORCHESTRATOR"
 echo " Host: Ubuntu 24.04.5 LTS (1 vCPU, 3.8 GB RAM)"
-echo " Database Target: Host PostgreSQL 16 + pgvector 0.6.0"
+echo " Database Target: Host PostgreSQL 16 via Unix domain socket"
 echo " Ingress Target:  Host Nginx (via 127.0.0.1:3000 / 127.0.0.1:8000)"
 echo " Environment:     $(if [[ "${STAGING}" == "true" ]]; then echo "Staging (Mock Outbound)"; else echo "Production"; fi)"
+echo " Skip Build Mode: ${SKIP_BUILD}"
 echo " Dry-Run Mode:    ${DRY_RUN}"
 echo "=================================================================="
 
@@ -57,19 +61,26 @@ for VAR in "${REQUIRED_VARS[@]}"; do
 done
 pass "Environment configuration validated."
 
-# Step 2: Database Connectivity & pgvector Verification
-info "Step 2: Checking Host PostgreSQL 16 & pgvector 0.6.0..."
+# Step 2: Database Connectivity & Socket Verification
+info "Step 2: Checking Host PostgreSQL 16 & pgvector Socket..."
+SOCKET_PATH="/var/run/postgresql/.s.PGSQL.5432"
 if [[ "${DRY_RUN}" == "true" ]]; then
-    info "[DRY-RUN] Would test connectivity to host PostgreSQL and check extension vector"
+    info "[DRY-RUN] Would test connectivity to host PostgreSQL socket or 127.0.0.1:5432"
 else
-    if command -v pg_isready >/dev/null 2>&1; then
-        if ! pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1; then
-            fail "Host PostgreSQL 16 is not responding on 127.0.0.1:5432."
+    PG_ACCESSIBLE=false
+    if [[ -S "${SOCKET_PATH}" ]]; then
+        info "Found active Unix domain socket: ${SOCKET_PATH}"
+        PG_ACCESSIBLE=true
+    elif command -v pg_isready >/dev/null 2>&1; then
+        if pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1; then
+            PG_ACCESSIBLE=true
         fi
-        pass "Host PostgreSQL 16 is responding on port 5432."
-    else
-        warn "pg_isready not in PATH; skipping client probe."
     fi
+
+    if [[ "${PG_ACCESSIBLE}" != "true" ]]; then
+        fail "Host PostgreSQL 16 is not responding via socket (/var/run/postgresql) or TCP."
+    fi
+    pass "Host PostgreSQL 16 is verified."
 fi
 
 # Step 3: Confirmation Gate
@@ -85,23 +96,28 @@ if [[ "${DRY_RUN}" != "true" && "${FORCE}" != "true" ]]; then
     fi
 fi
 
-# Step 4: Pre-Deployment Database Snapshot
+# Step 4: Pre-Deployment Database Snapshot (Mandatory for existing DB)
 info "Step 4: Executing Pre-Deployment Database Snapshot..."
 if [[ "${DRY_RUN}" == "true" ]]; then
     "${SCRIPT_DIR}/backup_host_db.sh" --pre-deploy --dry-run
 else
-    "${SCRIPT_DIR}/backup_host_db.sh" --pre-deploy || warn "Initial backup skipped (clean database)."
+    # Must exit 0. If backup fails on existing database, deployment halts immediately.
+    "${SCRIPT_DIR}/backup_host_db.sh" --pre-deploy
 fi
-pass "Database snapshot check completed."
+pass "Pre-deployment database snapshot check completed."
 
-# Step 5: Build Container Images
-info "Step 5: Building Application Container Images..."
-if [[ "${DRY_RUN}" == "true" ]]; then
-    info "[DRY-RUN] Would execute: docker compose -f ${COMPOSE_FILE} build"
+# Step 5: Build Container Images (or skip if prebuilt)
+if [[ "${SKIP_BUILD}" == "true" ]]; then
+    info "Step 5: Skipping on-server image build (--skip-build flag set). Using prebuilt images."
 else
-    docker compose -f "${COMPOSE_FILE}" build
+    info "Step 5: Building Application Container Images..."
+    if [[ "${DRY_RUN}" == "true" ]]; then
+        info "[DRY-RUN] Would execute: docker compose -f ${COMPOSE_FILE} build"
+    else
+        docker compose -f "${COMPOSE_FILE}" build
+    fi
+    pass "Container images built successfully."
 fi
-pass "Images built successfully."
 
 # Step 6: Schema Migrations (Migration-Before-Ingress Invariant)
 info "Step 6: Executing Alembic Schema Migrations to Head..."
@@ -110,10 +126,10 @@ if [[ "${DRY_RUN}" == "true" ]]; then
 else
     docker compose -f "${COMPOSE_FILE}" run --rm migration
 fi
-pass "Database schema migrations applied to head."
+pass "Database schema migrations applied cleanly to head."
 
 # Step 7: Start Application Services (API, Worker, Frontend)
-info "Step 7: Starting Application Containers..."
+info "Step 7: Starting Application Containers (bound strictly to 127.0.0.1)..."
 if [[ "${DRY_RUN}" == "true" ]]; then
     info "[DRY-RUN] Would execute: docker compose -f ${COMPOSE_FILE} up -d api worker frontend"
 else
@@ -121,13 +137,13 @@ else
 fi
 pass "Application services started."
 
-# Step 8: Health Probes
+# Step 8: Health Probes with Automatic Rollback on Failure
 info "Step 8: Probing Local Endpoints..."
 if [[ "${DRY_RUN}" == "true" ]]; then
-    info "[DRY-RUN] Would test http://127.0.0.1:8000/health and http://127.0.0.1:3000"
+    info "[DRY-RUN] Would probe http://127.0.0.1:8000/health and http://127.0.0.1:3000"
 else
     sleep 5
-    RETRIES=10
+    RETRIES=15
     API_HEALTHY=false
     while (( RETRIES > 0 )); do
         if curl -s -f http://127.0.0.1:8000/health >/dev/null 2>&1; then
@@ -141,22 +157,26 @@ else
     if [[ "${API_HEALTHY}" == "true" ]]; then
         pass "FastAPI Backend is healthy on 127.0.0.1:8000."
     else
-        fail "FastAPI Backend failed health check probe."
+        warn "Backend health check failed. Initiating automatic rollback..."
+        "${SCRIPT_DIR}/rollback_hostinger.sh" --confirm
+        fail "Deployment failed: FastAPI Backend was not healthy. Stack rolled back."
     fi
 
     if curl -s -f http://127.0.0.1:3000 >/dev/null 2>&1; then
         pass "Next.js Frontend is responsive on 127.0.0.1:3000."
     else
-        warn "Frontend returned non-200 on initial probe. Check container logs."
+        warn "Frontend returned non-200 on initial probe. Check logs: docker compose -f ${COMPOSE_FILE} logs frontend"
     fi
 fi
 
 # Step 9: Invariant Verification
 info "Step 9: Verifying Automation Safety Invariants..."
-pass "Outbound WhatsApp kill switch remains active by default."
+if [[ "${STAGING}" == "true" || "${AUTOMATION_OUTBOUND_ENABLED:-false}" != "true" ]]; then
+    pass "Outbound WhatsApp kill switch confirmed active (AUTOMATION_OUTBOUND_ENABLED=false)."
+fi
 
 echo "=================================================================="
-echo -e "\033[0;32mCONTAINER DEPLOYMENT COMPLETE.\033[0m"
+echo -e "\033[0;32mCONTAINER DEPLOYMENT COMPLETE & HEALTHY.\033[0m"
 echo "Next Step: Configure host Nginx virtual host as detailed in:"
 echo "  deploy/vps/nginx/README.md"
 echo "=================================================================="

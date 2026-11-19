@@ -447,16 +447,26 @@ When deploying to a Hostinger KVM 1 VPS with existing `n8n.dataagent.in` and hos
 1. **Architectural Profile (`compose.hostinger.yaml`):**
    - Caddy is omitted; host Nginx handles public TLS and routing.
    - Container ports are published strictly to loopback: `127.0.0.1:3000` (frontend) and `127.0.0.1:8000` (API).
-   - Backend and worker connect to host PostgreSQL 16 via `host.docker.internal:5432` (`host-gateway`).
+   - Backend and worker connect to host PostgreSQL 16 via mounted `/var/run/postgresql` Unix socket (`host=/var/run/postgresql`), eliminating TCP network port exposure and avoiding bridge loopback routing failure.
    - Sizing capped at 1.1 GB RAM across all Physio One containers (400M API, 350M Worker, 350M Frontend).
+   - Resource optimization supports `--skip-build` to deploy pre-built images, protecting the 1 vCPU host from build exhaustion.
 2. **Database Provisioning (Host PostgreSQL 16):**
    ```bash
-   sudo -u postgres psql -f deploy/vps/database/init_host_postgres.sql
+   # Provision database with least-privilege role
+   sudo -u postgres psql -v physio_password='YOUR_SECURE_PASSWORD' -f deploy/vps/database/init_host_postgres.sql
+
+   # Add local password rule to /etc/postgresql/16/main/pg_hba.conf before 'local all all peer':
+   # local   physio_db   physio_user   scram-sha-256
+   sudo systemctl reload postgresql
+
+   # Verify extensions, role permissions, and HNSW index:
    sudo -u postgres psql -d physio_db -f deploy/vps/database/verify_host_postgres.sql
    ```
 3. **Container Launch:**
    ```bash
    ./deploy/vps/scripts/deploy_hostinger.sh
+   # Or with pre-built images:
+   ./deploy/vps/scripts/deploy_hostinger.sh --skip-build
    ```
 4. **Host Nginx Integration:**
    ```bash
@@ -466,4 +476,5 @@ When deploying to a Hostinger KVM 1 VPS with existing `n8n.dataagent.in` and hos
    sudo nginx -t && sudo systemctl reload nginx
    ```
    *(Rollback: `sudo rm -f /etc/nginx/sites-enabled/physio.conf && sudo nginx -t && sudo systemctl reload nginx`).*
+
 

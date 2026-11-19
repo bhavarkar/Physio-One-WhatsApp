@@ -34,8 +34,8 @@ pass()  { echo -e "\033[0;32m[PASS]\033[0m  $*"; }
 warn()  { echo -e "\033[0;33m[WARN]\033[0m  $*"; }
 fail()  { echo -e "\033[0;31m[FAIL]\033[0m  $*" >&2; exit 1; }
 
-warn "DATA INTEGRITY INVARIANT: Rollback resets container images ONLY."
-warn "Database migrations are NOT downgraded automatically to avoid data loss."
+warn "DATA INTEGRITY INVARIANT: Rollback resets container images/processes ONLY."
+warn "Database migrations are NOT downgraded automatically to avoid clinical data loss."
 
 if [[ "${DRY_RUN}" != "true" && "${CONFIRM}" != "true" ]]; then
     warn "Pass '--confirm' to authorize container rollback."
@@ -49,19 +49,22 @@ if [[ "${DRY_RUN}" == "true" ]]; then
     exit 0
 fi
 
-info "1. Re-asserting outbound automation kill switch..."
+info "1. Re-asserting outbound automation kill switch in environment..."
 docker compose -f "${COMPOSE_FILE}" exec -T api python -c "from app.core.config import settings; settings.AUTOMATION_OUTBOUND_ENABLED = False" 2>/dev/null || true
 pass "Outbound messaging confirmed suppressed."
 
 info "2. Restarting application containers..."
-docker compose -f "${COMPOSE_FILE}" restart api worker frontend
+docker compose -f "${COMPOSE_FILE}" restart api worker frontend 2>/dev/null || {
+    info "Containers were stopped; starting up instead..."
+    docker compose -f "${COMPOSE_FILE}" up -d api worker frontend
+}
 
 info "3. Verifying health post-rollback..."
 sleep 5
 if curl -s -f http://127.0.0.1:8000/health >/dev/null 2>&1; then
     pass "Backend API is healthy on 127.0.0.1:8000."
 else
-    warn "Backend API health check returned non-200. Check logs: docker compose -f compose.hostinger.yaml logs api"
+    warn "Backend API health check returned non-200. Check logs: docker compose -f ${COMPOSE_FILE} logs api"
 fi
 
 pass "Application rollback completed successfully."

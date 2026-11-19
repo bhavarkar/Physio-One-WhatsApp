@@ -796,3 +796,24 @@ A dedicated Python worker daemon provides continuous background processing for c
   - Strict security headers, 15MB request body size, WebSocket upgrade headers, and zero interference with existing `n8n.dataagent.in`.
 - **Operational Tooling**: Authored `deploy_hostinger.sh` and `rollback_hostinger.sh` with strict error handling and dry-run simulation.
 
+---
+
+## Task 23.1 — Hostinger Deployment Preflight Remediation (2026-11-19)
+- **Root-Cause Analysis & Remediation of PostgreSQL Connectivity**:
+  - *Identified Root Cause*: Host PostgreSQL 16 on Ubuntu listens strictly on `127.0.0.1:5432`. Inside Docker bridge containers, `127.0.0.1` refers to the container namespace, and `host.docker.internal:host-gateway` resolves to the Docker bridge gateway interface (e.g. `172.17.0.1`), where incoming TCP packets are rejected by the Linux kernel because PostgreSQL does not listen on the bridge IP. Moreover, opening `listen_addresses = '*'` on a host with inactive UFW exposes port 5432 to the public internet.
+  - *Remediated Architecture (Unix Domain Socket)*: Mounted `${POSTGRES_SOCKET_HOST_DIR:-/var/run/postgresql}:/var/run/postgresql:rw` into container services (`api`, `worker`, `migration`). Configured SQLAlchemy async/sync database URLs with `host=/var/run/postgresql`. This eliminates TCP network exposure entirely and resolves loopback bridge routing.
+  - *pg_hba.conf Rule*: Added targeted `local physio_db physio_user scram-sha-256` rule before `local all all peer`, allowing container non-root user `appuser` (UID 10001) to authenticate via SCRAM-SHA-256 password over the Unix socket while preserving `peer` authentication for host utilities and existing `n8n`.
+- **Database Provisioning Hardening**:
+  - Updated `init_host_postgres.sql`: Removed hardcoded passwords; requires `-v physio_password='...'`; enforces `NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION` on `physio_user`; grants database and schema ownership to `physio_user` for unprivileged migration execution.
+  - Updated `verify_host_postgres.sql`: Verifies `rolsuper=false`, checks `vector 0.6.0` and `btree_gist` extensions, and tests 1536-dimensional HNSW cosine index creation.
+- **Deployment Script Reliability**:
+  - `deploy_hostinger.sh`: Validates Unix socket `/var/run/postgresql/.s.PGSQL.5432` or TCP; enforces pre-deployment database backup; supports `--skip-build` to deploy pre-built images; runs migrations before service start; enforces loopback health checks; triggers automatic rollback on health check failure.
+  - `backup_host_db.sh`: Safely skips pre-deploy backup if `physio_db` does not exist yet (clean install); aborts deployment if existing DB backup fails; validates archive integrity with `gzip -t`.
+  - `rollback_hostinger.sh`: Re-asserts `AUTOMATION_OUTBOUND_ENABLED=False`; restarts containers; verifies health; guarantees zero automatic database down-migrations.
+  - `restore_host_db.sh`: Validates archive with `gzip -t`; enforces `--confirm-restore`; supports Unix domain socket; verifies restored table count $\ge 63$.
+- **Resource & Build Hazard Mitigation**:
+  - Documented Next.js and wheel compilation build hazard on 1 vCPU host (100% CPU, 800–1200 MiB RAM spike) and provided `--skip-build` flag to deploy pre-built images off-server.
+- **Automated Verification**:
+  - Authored `test_vps_hostinger_remediation.py` with 8 targeted tests covering Unix socket resolution, loopback bindings, Caddy omission, database provisioning least-privilege, and outbound fail-closed defaults. All 263 backend tests passing.
+
+

@@ -83,6 +83,28 @@ Using the existing host PostgreSQL 16 daemon instead of running a separate conta
 
 *Note: A containerized PostgreSQL fallback profile (`--profile container-db`) is also provided in `compose.hostinger.yaml` should the operator prefer complete container isolation.*
 
+### 3.4 Root-Cause Analysis: Host PostgreSQL Connectivity & Unix Domain Socket Remediation
+During preflight inspection, an architectural incompatibility was identified between containerized services and host PostgreSQL:
+1. **The Incompatibility:** Host PostgreSQL 16 listens exclusively on `127.0.0.1:5432`. Inside a Docker container, `127.0.0.1` refers to the container's own network namespace, not the host. Docker's `host.docker.internal` (via `extra_hosts: ["host.docker.internal:host-gateway"]`) resolves to the Docker bridge gateway interface (e.g. `172.17.0.1` or `172.20.0.1`). Because PostgreSQL is bound only to `127.0.0.1`, TCP packets arriving at the bridge IP are rejected by the Linux kernel (`Connection refused`). Furthermore, modifying `listen_addresses` to `*` or `0.0.0.0` would violate least-privilege security by exposing PostgreSQL across all network interfaces on a host where UFW is inactive.
+2. **The Remediated Architecture: Unix Domain Sockets:**
+   Rather than modifying network bindings or opening bridge TCP ports, the deployment architecture mounts the host PostgreSQL Unix socket directory into each container:
+   ```yaml
+   volumes:
+     - ${POSTGRES_SOCKET_HOST_DIR:-/var/run/postgresql}:/var/run/postgresql:rw
+   ```
+   Containers connect using the standard Unix socket URI query parameter:
+   ```text
+   DATABASE_URL=postgresql+asyncpg://physio_user:***@/physio_db?host=/var/run/postgresql
+   DATABASE_URL_SYNC=postgresql+psycopg2://physio_user:***@/physio_db?host=/var/run/postgresql
+   ```
+3. **pg_hba.conf Local Authentication Configuration:**
+   Because container processes run under UID 10001 (`appuser`), standard PostgreSQL `peer` authentication over Unix sockets fails. By adding a targeted rule in `/etc/postgresql/16/main/pg_hba.conf`:
+   ```text
+   # Allow physio_user password authentication over Unix domain socket
+   local   physio_db       physio_user                             scram-sha-256
+   ```
+   placed immediately above `local all all peer`, password authentication is cleanly enforced for `physio_user` without disrupting existing peer-authenticated system tools or the coexisting `n8n` workflow engine.
+
 ---
 
 ## 4. Resource Allocation & Sizing Plan (1 vCPU, 4 GB RAM)
@@ -114,6 +136,12 @@ Hostinger KVM 1 Physical RAM: 3.8 GiB (3,891 MiB)
 - **Single Background Worker:** Background runner daemon executes single-threaded polling sweeps every 15 seconds (`WORKER_POLL_INTERVAL_SECONDS=15`).
 - **Connection Pools:** PostgreSQL connection pool capped at `POSTGRES_POOL_SIZE=3` with `POSTGRES_MAX_OVERFLOW=5` for API, and `pool_size=2` / `max_overflow=3` for worker (total $\le 13$ connections).
 - **Log Management:** Every container is capped using the `json-file` driver (`max-size: "10m"`, `max-file: "3"`), guaranteeing total container logs never exceed 90 MB.
+
+### 4.4 On-Server Build Hazard & Off-Server Build Mitigation
+1. **The Hazard:** Running `docker compose build` on a 1 vCPU / 3.8 GiB RAM host while `n8n` (~574 MiB) and PostgreSQL are active introduces significant operational risk. Next.js (`npm run build`) and Python wheel compilation spike CPU utilization to 100% and consume 800–1,200 MiB of transient RAM. On a single-core system, this risks starvation of the active `n8n` workflow engine and can trigger Linux OOM-killer invocations.
+2. **Mitigation Strategy:**
+   - **Recommended Approach (Pre-built Images):** Build images on a developer workstation or CI runner, push to a container registry, and deploy on the VPS using `./scripts/deploy_hostinger.sh --skip-build`.
+   - **Fallback Approach (On-Server Build with Safety Gates):** If images must be built on the VPS, ensure swap space ($\ge 4$ GB) is verified, execute builds sequentially, and monitor `n8n` response latency throughout the build step.
 
 ---
 
