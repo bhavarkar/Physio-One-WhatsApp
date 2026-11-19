@@ -88,3 +88,31 @@ docker compose up -d
 - **Live Stack Status**:
   - 4 services active and healthy: `physio_postgres` (pgvector:pg16), `physio_api`, `physio_worker`, `physio_frontend`.
   - One-shot `physio_migration` verified with exit code 0.
+
+---
+
+## 7. Task 20 — Hostinger VPS Standalone Docker Compose Stack (`deploy/vps/compose.yaml`)
+
+- Multi-container topology for greenfield VPS deployments: `caddy`, `api`, `worker`, `frontend`, `postgres`, `migration`.
+- PostgreSQL port 5432 has zero host port mappings.
+- Total container memory limits capped at 2.4 GB out of 4.0 GB host RAM.
+
+---
+
+## 8. Task 23 — Hostinger KVM 1 Coexistence Stack (`deploy/vps/compose.hostinger.yaml`)
+
+- Engineered for VPS environments with pre-existing host Nginx and host PostgreSQL 16 (e.g. running alongside `n8n.dataagent.in`).
+- **No Caddy Container**: Ingress handled by host Nginx.
+- **Strict Loopback Bindings**:
+  - API: `127.0.0.1:8000:8000`
+  - Frontend: `127.0.0.1:3000:3000`
+  - Prevents Docker from manipulating iptables and exposing ports on `0.0.0.0`.
+- **Host Gateway Networking**:
+  - Uses `extra_hosts: ["host.docker.internal:host-gateway"]` to connect directly to host PostgreSQL 16 at `host.docker.internal:5432`.
+- **Resource Constraints (1 vCPU, 4 GB RAM)**:
+  - API: 400 MB limit, 0.50 CPU limit.
+  - Worker: 350 MB limit, 0.30 CPU limit.
+  - Frontend: 350 MB limit, 0.40 CPU limit.
+  - Total container limits: 1,100 MB (~1.1 GB).
+- **Optional Containerized DB Profile**: Includes `postgres` service with profile `container-db` as a zero-host-port container fallback.
+

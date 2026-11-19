@@ -10,6 +10,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0-draft] - 2026-11-18
 
 ### Added
+- **Task 23: Prepare Physio One for Existing Hostinger VPS (Host Nginx + Host PostgreSQL 16 + n8n Coexistence)**:
+  - **Adapted Compose Profile (`deploy/vps/compose.hostinger.yaml`)**:
+    - Omitted Caddy reverse proxy to prevent port 80/443 conflicts with existing host Nginx.
+    - Bound container ingress strictly to `127.0.0.1:3000` (Next.js) and `127.0.0.1:8000` (FastAPI), closing the Docker iptables bypass vulnerability on hosts with inactive UFW.
+    - Added `host.docker.internal:host-gateway` enabling containers to talk to host PostgreSQL 16 on port 5432.
+    - Sized container resource limits for 1 vCPU / 4 GB RAM: API 400M, Worker 350M, Frontend 350M (total 1,100 MB), leaving ~1.9 GB free RAM.
+  - **Database Compatibility & Provisioning (pgvector 0.6.0)**:
+    - Confirmed pgvector 0.6.0 is 100% compatible with all Alembic migrations and HNSW cosine distance indexing (`vector_cosine_ops`).
+    - Authored host database provisioning DDL `deploy/vps/database/init_host_postgres.sql` and verification probe `verify_host_postgres.sql`.
+    - Authored host database backup runner (`backup_host_db.sh`) and restore runner (`restore_host_db.sh`).
+  - **Host Nginx Virtual Host (`deploy/vps/nginx/physio.conf` & `README.md`)**:
+    - Prepared dedicated Nginx virtual host for `physio.dataagent.in` reverse-proxying frontend and API with 15MB request limits and Certbot setup guide.
+    - Guaranteed 100% non-interference with existing `n8n.dataagent.in` virtual host.
+  - **Deployment Tooling & Approval Documentation**:
+    - Authored `deploy_hostinger.sh` and `rollback_hostinger.sh` with strict error handling.
+    - Authored comprehensive infrastructure audit in `deploy/vps/HOSTINGER_VPS_AUDIT.md`.
+    - Authored operator action plan in `deploy/vps/VPS_DEPLOYMENT_APPROVAL.md`.
+
+- **Task 22: Hostinger Ubuntu VPS Read-Only Infrastructure Preflight & Deployment Readiness Audit**:
+  - Validated host baseline: Ubuntu 24.04.5 LTS, 1 vCPU, 3.8 GiB RAM (2.6 GiB available), 26 GB free disk, 4 GB swap.
+  - Documented active workloads: `n8n` container behind host Nginx on ports 80/443, host PostgreSQL 16 on port 5432, pgvector 0.6.0 available, inactive UFW.
+
 - **Task 21: Hostinger VPS Local Integration Rehearsal, Security Audit & Deployment Approval Gate**:
   - **Disposable Multi-Container Rehearsal Stack**:
     - Rehearsed complete VPS Docker Compose architecture using `compose.rehearsal.yaml` on isolated network `physio_vps_rehearsal_network` and ephemeral volumes (`physio_vps_rehearsal_*`).

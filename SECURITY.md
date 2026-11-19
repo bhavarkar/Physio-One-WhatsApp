@@ -354,3 +354,27 @@ The platform handles patient communications, appointment schedules, and contact 
 - **Read-Only Preflight Security Checklist**:
   - Authored `deploy/vps/HOSTINGER_PREFLIGHT_CHECKLIST.md` specifying non-mutating diagnostics for server inspection, ensuring no accidental deletion or disruption of existing VPS workloads during initial reconnaissance.
 
+---
+
+## Task 23 Hostinger KVM 1 Security Audit & Docker Port Exposure Defense (2026-11-18)
+
+- **Docker iptables Bypass on Hosts with Inactive UFW**:
+  - On Linux hosts where UFW is inactive (or where Docker manipulates iptables), publishing ports via `ports: ["PORT:PORT"]` automatically publishes to `0.0.0.0`, bypassing host firewall protection and exposing internal services to the public internet.
+  - In `deploy/vps/compose.hostinger.yaml`, all container ports are strictly locked to host loopback:
+    - FastAPI API: `127.0.0.1:8000:8000`
+    - Next.js Dashboard: `127.0.0.1:3000:3000`
+  - Zero external access is permitted to container ports; all traffic must traverse the authenticated, TLS-encrypted host Nginx reverse proxy.
+- **Host PostgreSQL Least Privilege & Network Binding**:
+  - Created dedicated role `physio_user` with restricted privileges limited strictly to `physio_db` and schema `public`.
+  - Database port 5432 is restricted to `127.0.0.1` and the internal Docker bridge gateway (`host.docker.internal`).
+- **Nginx Security Headers & Payload Controls**:
+  - `Strict-Transport-Security "max-age=31536000; includeSubDomains"`
+  - `X-Content-Type-Options "nosniff"`
+  - `X-Frame-Options "DENY"`
+  - `Referrer-Policy "strict-origin-when-cross-origin"`
+  - `client_max_body_size 15M` capped to prevent memory exhaustion and buffer overflow attacks.
+- **Fail-Closed WhatsApp Outbound Defaults**:
+  - `AUTOMATION_OUTBOUND_ENABLED=false` and `STAGING_MOCK_OUTBOUND=true` preserved in `compose.hostinger.yaml`.
+  - Outbound dispatches remain blocked by default until explicit operator activation.
+
+

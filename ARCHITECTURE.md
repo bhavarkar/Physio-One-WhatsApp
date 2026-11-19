@@ -776,3 +776,23 @@ A dedicated Python worker daemon provides continuous background processing for c
 - **Deployment Safety Invariants**:
   - Retained strict staging isolation (`AUTOMATION_OUTBOUND_ENABLED=false`, `STAGING_MOCK_OUTBOUND=true`).
   - Audited bash script failure handling and dry-run safety across `deploy/vps/scripts/*.sh`.
+
+---
+
+## Task 23 — Hostinger KVM 1 VPS Coexistence Architecture (Host Nginx + Host PostgreSQL 16 + n8n) (2026-11-18)
+- **Target Environment Adaptation**: Adapted deployment architecture for a Hostinger KVM 1 VPS (Ubuntu 24.04.5 LTS, 1 vCPU, 3.8 GiB RAM, 26 GB disk free) running an existing `n8n` Docker container (`n8n.dataagent.in`) behind host Nginx.
+- **Service Stack Decoupling (`compose.hostinger.yaml`)**:
+  - **No Caddy Container**: Omitted Caddy to eliminate port 80/443 contention with host Nginx.
+  - **Host Loopback Binding**: `api` (port 8000) and `frontend` (port 3000) are published strictly to `127.0.0.1`, mitigating the Docker iptables firewall bypass vulnerability on hosts with inactive UFW.
+  - **Host PostgreSQL 16 Integration**: Backend and worker connect via `host.docker.internal:5432` (`host-gateway`), eliminating a duplicate database engine and saving ~150–250 MiB RAM.
+  - **Single Background Worker**: 1 vCPU concurrency tuning; 15-second polling sweeps; database pool size capped at 3 (API) and 2 (worker).
+  - **Hard Memory Limits**: Capped at 1,100 MiB (API 400M, Worker 350M, Frontend 350M), leaving ~1.9 GiB free for n8n, host PostgreSQL, and OS.
+- **Database Compatibility (pgvector 0.6.0)**:
+  - Audited all Alembic migrations and models. Verified that pgvector 0.6.0 fully supports 1536-dimensional embeddings and HNSW cosine distance indexing (`vector_cosine_ops`).
+  - Authored DDL script `deploy/vps/database/init_host_postgres.sql` and verification script `verify_host_postgres.sql`.
+  - Authored host database backup runner (`backup_host_db.sh`) and restore runner (`restore_host_db.sh`).
+- **Host Nginx Virtual Host (`deploy/vps/nginx/physio.conf`)**:
+  - Dedicated virtual host for `physio.dataagent.in` reverse-proxying Next.js UI (`http://127.0.0.1:3000`) and FastAPI endpoints/webhooks (`http://127.0.0.1:8000`).
+  - Strict security headers, 15MB request body size, WebSocket upgrade headers, and zero interference with existing `n8n.dataagent.in`.
+- **Operational Tooling**: Authored `deploy_hostinger.sh` and `rollback_hostinger.sh` with strict error handling and dry-run simulation.
+

@@ -1,0 +1,231 @@
+name: physio_hostinger
+
+services:
+  # ----------------------------------------------------------------------------
+  # FastAPI REST Backend Service
+  # Runs behind host Nginx reverse proxy via 127.0.0.1:8000
+  # ----------------------------------------------------------------------------
+  api:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile.api
+    image: physio-one-api:vps
+    container_name: physio_hostinger_api
+    restart: unless-stopped
+    ports:
+      # Bound strictly to 127.0.0.1 (host loopback only).
+      # NEVER bind to 0.0.0.0 on a host with inactive UFW!
+      - "127.0.0.1:8000:8000"
+    extra_hosts:
+      # Allows containers to connect to host PostgreSQL 16 on 127.0.0.1:5432 / docker0 gateway
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - physio_media_storage:/app/storage
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - APP_NAME=Physio One WhatsApp AI Agent
+      - APP_SECRET=${APP_SECRET}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=HS256
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=120
+      - AUTOMATION_WORKER_SECRET_TOKEN=${AUTOMATION_WORKER_SECRET_TOKEN}
+      - REQUIRE_OIDC_IN_PRODUCTION=false
+      # Connects to host PostgreSQL 16 by default via host-gateway
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://physio_user:${POSTGRES_PASSWORD}@host.docker.internal:5432/physio_db}
+      - POSTGRES_POOL_SIZE=${POSTGRES_POOL_SIZE:-3}
+      - POSTGRES_MAX_OVERFLOW=${POSTGRES_MAX_OVERFLOW:-5}
+      - POSTGRES_POOL_TIMEOUT=30
+      - POSTGRES_POOL_RECYCLE=1800
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://physio.dataagent.in}
+      - WHATSAPP_PROVIDER_TYPE=${WHATSAPP_PROVIDER_TYPE:-meta}
+      - META_WHATSAPP_TOKEN=${META_WHATSAPP_TOKEN:-}
+      - META_WHATSAPP_PHONE_NUMBER_ID=${META_WHATSAPP_PHONE_NUMBER_ID:-}
+      - META_WHATSAPP_BUSINESS_ACCOUNT_ID=${META_WHATSAPP_BUSINESS_ACCOUNT_ID:-}
+      - META_WHATSAPP_APP_SECRET=${META_WHATSAPP_APP_SECRET:-}
+      - META_WEBHOOK_VERIFY_TOKEN=${META_WEBHOOK_VERIFY_TOKEN:-}
+      - YCLOUD_API_KEY=${YCLOUD_API_KEY:-}
+      - YCLOUD_WEBHOOK_SECRET=${YCLOUD_WEBHOOK_SECRET:-}
+      - LLM_PROVIDER_TYPE=${LLM_PROVIDER_TYPE:-openai}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - AUTOMATION_OUTBOUND_ENABLED=${AUTOMATION_OUTBOUND_ENABLED:-false}
+      - STAGING_MOCK_OUTBOUND=${STAGING_MOCK_OUTBOUND:-true}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 400M
+        reservations:
+          memory: 150M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - physio_hostinger_network
+
+  # ----------------------------------------------------------------------------
+  # Background Automation & Queue Worker Daemon
+  # Runs continuously: automations, debouncing, inactivity checks, campaigns
+  # ----------------------------------------------------------------------------
+  worker:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile.api
+    image: physio-one-api:vps
+    container_name: physio_hostinger_worker
+    restart: unless-stopped
+    command: ["python", "-m", "app.workers.runner"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - physio_media_storage:/app/storage
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - APP_SECRET=${APP_SECRET}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - AUTOMATION_WORKER_SECRET_TOKEN=${AUTOMATION_WORKER_SECRET_TOKEN}
+      - REQUIRE_OIDC_IN_PRODUCTION=false
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://physio_user:${POSTGRES_PASSWORD}@host.docker.internal:5432/physio_db}
+      - POSTGRES_POOL_SIZE=2
+      - POSTGRES_MAX_OVERFLOW=3
+      - POSTGRES_POOL_TIMEOUT=30
+      - POSTGRES_POOL_RECYCLE=1800
+      - AUTOMATION_OUTBOUND_ENABLED=${AUTOMATION_OUTBOUND_ENABLED:-false}
+      - STAGING_MOCK_OUTBOUND=${STAGING_MOCK_OUTBOUND:-true}
+      - WORKER_POLL_INTERVAL_SECONDS=15
+      - WHATSAPP_PROVIDER_TYPE=${WHATSAPP_PROVIDER_TYPE:-meta}
+      - META_WHATSAPP_TOKEN=${META_WHATSAPP_TOKEN:-}
+      - META_WHATSAPP_PHONE_NUMBER_ID=${META_WHATSAPP_PHONE_NUMBER_ID:-}
+      - LLM_PROVIDER_TYPE=${LLM_PROVIDER_TYPE:-openai}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    deploy:
+      resources:
+        limits:
+          cpus: "0.30"
+          memory: 350M
+        reservations:
+          memory: 100M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - physio_hostinger_network
+
+  # ----------------------------------------------------------------------------
+  # Next.js Frontend Dashboard Service
+  # Runs behind host Nginx reverse proxy via 127.0.0.1:3000
+  # ----------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile.frontend
+    image: physio-one-frontend:vps
+    container_name: physio_hostinger_frontend
+    restart: unless-stopped
+    ports:
+      # Bound strictly to 127.0.0.1 (host loopback only).
+      - "127.0.0.1:3000:3000"
+    environment:
+      - NODE_ENV=production
+      - INTERNAL_API_URL=http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.40"
+          memory: 350M
+        reservations:
+          memory: 100M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - physio_hostinger_network
+
+  # ----------------------------------------------------------------------------
+  # One-Shot Migration Runner
+  # Applies Alembic migrations to head before promoting ingress traffic
+  # Run via: docker compose -f compose.hostinger.yaml run --rm migration
+  # ----------------------------------------------------------------------------
+  migration:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile.api
+    image: physio-one-api:vps
+    container_name: physio_hostinger_migration
+    profiles:
+      - tools
+    command: ["alembic", "upgrade", "head"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://physio_user:${POSTGRES_PASSWORD}@host.docker.internal:5432/physio_db}
+      - APP_SECRET=${APP_SECRET}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+    networks:
+      - physio_hostinger_network
+
+  # ----------------------------------------------------------------------------
+  # Optional Containerized PostgreSQL Fallback
+  # Only runs if operator passes '--profile container-db'
+  # NO port mapping to host port 5432 (avoids conflict with host PostgreSQL)
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: physio_hostinger_postgres
+    restart: unless-stopped
+    profiles:
+      - container-db
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-physio_db}
+      - POSTGRES_USER=${POSTGRES_USER:-physio_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=96MB"
+      - "-c"
+      - "work_mem=4MB"
+      - "-c"
+      - "maintenance_work_mem=32MB"
+      - "-c"
+      - "max_connections=30"
+    volumes:
+      - physio_container_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-physio_user} -d ${POSTGRES_DB:-physio_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 450M
+    networks:
+      - physio_hostinger_network
+
+networks:
+  physio_hostinger_network:
+    name: physio_hostinger_network
+    driver: bridge
+
+volumes:
+  physio_media_storage:
+    name: physio_hostinger_media_storage
+  physio_container_postgres_data:
+    name: physio_hostinger_postgres_data

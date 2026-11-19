@@ -270,3 +270,30 @@ On a 4 GB RAM Hostinger VPS, the single-organization platform comfortably suppor
 - **Conversations:** 5,000–10,000 monthly active patient WhatsApp dialogues.
 - **Webhook Ingestion Rate:** 20–30 messages per second burst capacity.
 - **Database Capacity:** Up to ~500,000 historical messages and vector embeddings before requiring disk expansion.
+
+---
+
+## 9. Hostinger KVM 1 Deployment Profile (Host Nginx + Host PostgreSQL 16)
+
+When deploying to a Hostinger VPS that already runs **n8n** behind host Nginx (e.g. `n8n.dataagent.in`) with host PostgreSQL 16:
+
+### 9.1 Architectural Adaptation (`compose.hostinger.yaml`)
+- **No Caddy Container:** Host Nginx owns ports 80 & 443.
+- **Host Loopback Ingress:** Frontend is published strictly to `127.0.0.1:3000` and API to `127.0.0.1:8000`.
+- **Host Database Integration:** Connects to host PostgreSQL 16 via `host.docker.internal:5432` (`host-gateway`), eliminating duplicate database container overhead.
+- **pgvector 0.6.0 Verification:** Fully compatible with 1536-dimensional embeddings and HNSW cosine indexes (`vector_cosine_ops`).
+- **Resource Limits:** Capped at 1.1 GB total RAM (API 400M, Worker 350M, Frontend 350M), leaving ~1.9 GB free on a 3.8 GB VPS.
+
+### 9.2 Execution Steps
+1. Provision host database:
+   ```bash
+   sudo -u postgres psql -f deploy/vps/database/init_host_postgres.sql
+   sudo -u postgres psql -d physio_db -f deploy/vps/database/verify_host_postgres.sql
+   ```
+2. Configure `.env` with `DATABASE_URL=postgresql+asyncpg://physio_user:***@host.docker.internal:5432/physio_db`.
+3. Launch container stack:
+   ```bash
+   ./scripts/deploy_hostinger.sh
+   ```
+4. Install and enable host Nginx virtual host as detailed in [deploy/vps/nginx/README.md](./nginx/README.md).
+

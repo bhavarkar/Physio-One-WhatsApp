@@ -438,3 +438,32 @@ During Task 21, the complete Hostinger VPS Docker Compose stack was rehearsed in
    - Hard container limits configured to 2.4 GB, providing 1.6 GB headroom for Ubuntu OS and page cache on a 4 GB VPS.
 5. **Read-Only Preflight Inspection:**
    - Preflight inspection checklist established in `deploy/vps/HOSTINGER_PREFLIGHT_CHECKLIST.md` for non-mutating server inspection in Task 22.
+
+---
+
+### 10.7 Hostinger KVM 1 Coexistence Profile (Host Nginx + Host PostgreSQL + n8n)
+
+When deploying to a Hostinger KVM 1 VPS with existing `n8n.dataagent.in` and host Nginx:
+1. **Architectural Profile (`compose.hostinger.yaml`):**
+   - Caddy is omitted; host Nginx handles public TLS and routing.
+   - Container ports are published strictly to loopback: `127.0.0.1:3000` (frontend) and `127.0.0.1:8000` (API).
+   - Backend and worker connect to host PostgreSQL 16 via `host.docker.internal:5432` (`host-gateway`).
+   - Sizing capped at 1.1 GB RAM across all Physio One containers (400M API, 350M Worker, 350M Frontend).
+2. **Database Provisioning (Host PostgreSQL 16):**
+   ```bash
+   sudo -u postgres psql -f deploy/vps/database/init_host_postgres.sql
+   sudo -u postgres psql -d physio_db -f deploy/vps/database/verify_host_postgres.sql
+   ```
+3. **Container Launch:**
+   ```bash
+   ./deploy/vps/scripts/deploy_hostinger.sh
+   ```
+4. **Host Nginx Integration:**
+   ```bash
+   sudo cp deploy/vps/nginx/physio.conf /etc/nginx/sites-available/physio.conf
+   sudo certbot --nginx -d physio.dataagent.in
+   sudo ln -sf /etc/nginx/sites-available/physio.conf /etc/nginx/sites-enabled/
+   sudo nginx -t && sudo systemctl reload nginx
+   ```
+   *(Rollback: `sudo rm -f /etc/nginx/sites-enabled/physio.conf && sudo nginx -t && sudo systemctl reload nginx`).*
+
